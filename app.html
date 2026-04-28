@@ -3689,7 +3689,7 @@
         let contentHtml = '';
         if (meal) {
           contentHtml = `
-            <div class="meal-day-meal-name">${escHtml(meal.name)}</div>
+            <div class="meal-day-meal-name">${escHtml(meal.dinner_name)}</div>
             ${ingCount > 0
               ? `<div class="meal-day-meta">🛒 ${ingCount} ingredient${ingCount !== 1 ? 's' : ''}</div>`
               : `<div class="meal-day-meta" style="font-style:italic">No ingredients yet</div>`}`;
@@ -3730,7 +3730,7 @@
       let mealName = '';
       let existingIngs = [];
       if (mealId) {
-        const { data: meal } = await db.from('meals').select('name').eq('id', mealId).single();
+        const { data: meal } = await db.from('meals').select('dinner_name').eq('id', mealId).single();
         mealName = meal?.name || '';
         const { data: ings } = await db.from('ingredients').select('*').eq('meal_id', mealId);
         existingIngs = ings || [];
@@ -3826,14 +3826,14 @@
       try {
         if (mealId) {
           // Update existing meal name
-          await db.from('meals').update({ name: mealName }).eq('id', mealId);
+          await db.from('meals').update({ dinner_name: mealName }).eq('id', mealId);
         } else {
           // Insert new meal, then query back for the ID
           // (chaining .select().single() on insert can return null data with some RLS configs)
           const { error: insertError } = await db.from('meals').insert({
             week_start_date: weekStart,
             day_of_week:     mealSheetDayOfWeek,
-            name:            mealName,
+            dinner_name:      mealName,
             created_by:      session.id
           });
           if (insertError) throw insertError;
@@ -3920,7 +3920,7 @@
 
       try {
         const { data: meals } = await db.from('meals')
-          .select('id, name')
+          .select('id, dinner_name')
           .eq('week_start_date', weekStart)
           .eq('day_of_week', todayDow);
 
@@ -3929,7 +3929,7 @@
         if (meal) {
           el.innerHTML = `
             <div class="home-dinner-planned">
-              <div class="home-dinner-name">${escHtml(meal.name)}</div>
+              <div class="home-dinner-name">${escHtml(meal.dinner_name)}</div>
               <div class="home-dinner-link" onclick="navigate('meals', document.querySelector('[data-tab=meals]'))">See week →</div>
             </div>`;
         } else {
