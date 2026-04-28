@@ -3900,7 +3900,10 @@
       if (matches.length === 0) { ac.style.display = 'none'; return; }
 
       ac.innerHTML = matches.map(t =>
-        `<div class="meal-autocomplete-item" onclick="selectMealTemplate('${t.id}', ${JSON.stringify(t.name)})">${escHtml(t.name)}</div>`
+        `<div class="meal-autocomplete-item"
+              data-id="${t.id}"
+              data-name="${escHtml(t.name)}"
+              onclick="selectMealTemplate(this.dataset.id, this.dataset.name)">${escHtml(t.name)}</div>`
       ).join('');
       ac.style.display = 'block';
     }
@@ -3922,7 +3925,7 @@
     async function saveAsTemplate(mealName) {
       // Avoid duplicates — update if exists, insert if not
       const { data: existing } = await db.from('meal_templates')
-        .select('id').eq('name', mealName).single();
+        .select('id').eq('name', mealName).maybeSingle();
 
       let templateId;
       if (existing?.id) {
