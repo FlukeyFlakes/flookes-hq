@@ -1136,6 +1136,293 @@
       opacity: 1;
       transform: translateX(-50%) translateY(0);
     }
+
+    /* ══════════════════════════════════════════════
+       CHORE BANK
+    ══════════════════════════════════════════════ */
+
+    /* Kid switcher pills (parents only) */
+    .bank-switcher {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .bank-kid-pill {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 16px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bank-kid-pill.active {
+      background: rgba(var(--user-rgb), 0.15);
+      border-color: rgba(var(--user-rgb), 0.45);
+      color: var(--user-color);
+    }
+    .bank-kid-pill-emoji { font-size: 1.1rem; }
+
+    /* Hero balance card */
+    .bank-hero-card {
+      background: linear-gradient(135deg, rgba(var(--user-rgb), 0.12) 0%, rgba(var(--user-rgb), 0.04) 100%);
+      border: 1px solid rgba(var(--user-rgb), 0.2);
+      border-radius: var(--radius);
+      padding: 26px 24px 22px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+    .bank-hero-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .bank-hero-amount {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 4.2rem;
+      font-weight: 300;
+      line-height: 1;
+      color: var(--user-color);
+      letter-spacing: -0.02em;
+    }
+    .bank-hero-earned {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+    .bank-payout-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 16px;
+      padding: 8px 18px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 100px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bank-payout-btn:active {
+      background: rgba(255,255,255,0.1);
+    }
+
+    /* Savings Goals */
+    .bank-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .bank-section-title {
+      font-size: 0.65rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .bank-add-goal-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--user-color);
+      cursor: pointer;
+      opacity: 0.8;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .bank-add-goal-btn:active { opacity: 0.5; }
+
+    .goal-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      margin-bottom: 10px;
+    }
+    .goal-card.goal-achieved {
+      background: rgba(var(--user-rgb), 0.06);
+      border-color: rgba(var(--user-rgb), 0.2);
+    }
+    .goal-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .goal-title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .goal-title {
+      font-size: 0.92rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+    .goal-achieved-badge {
+      font-size: 0.62rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--user-color);
+      background: rgba(var(--user-rgb), 0.15);
+      border-radius: 100px;
+      padding: 2px 9px;
+    }
+    .goal-delete-btn {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      opacity: 0.5;
+      cursor: pointer;
+      padding: 2px 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .goal-delete-btn:active { opacity: 1; }
+    .goal-amounts {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .goal-amounts strong {
+      color: var(--text);
+      font-weight: 600;
+    }
+    .goal-bar-track {
+      height: 6px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 100px;
+      overflow: hidden;
+    }
+    .goal-bar-fill {
+      height: 100%;
+      background: var(--user-color);
+      border-radius: 100px;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .goal-card.goal-achieved .goal-bar-fill {
+      background: var(--user-color);
+    }
+    .goal-pct {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      text-align: right;
+    }
+    .goal-card.goal-achieved .goal-pct {
+      color: var(--user-color);
+    }
+
+    /* Transaction history */
+    .bank-tx-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .bank-tx-row:last-child { border-bottom: none; }
+    .bank-tx-date {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      min-width: 48px;
+      flex-shrink: 0;
+    }
+    .bank-tx-desc {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bank-tx-amount {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .bank-tx-amount.positive { color: #22C55E; }
+    .bank-tx-amount.negative { color: #EF4444; }
+
+    .bank-no-goals {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding: 14px 16px;
+      text-align: center;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 10px;
+    }
+    .bank-no-tx {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      padding: 20px 0;
+      text-align: center;
+    }
+    .bank-loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 60px 0;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    /* Home bank preview */
+    .home-bank-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .home-bank-kid {
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      padding: 14px 14px 12px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .home-bank-kid:active { opacity: 0.7; }
+    .home-bank-kid-name {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .home-bank-kid-balance {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      line-height: 1;
+    }
+    .home-bank-solo {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0 2px;
+    }
+    .home-bank-solo-balance {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.8rem;
+      font-weight: 600;
+      color: var(--user-color);
+    }
+    .home-bank-link {
+      font-size: 0.75rem;
+      color: var(--user-color);
+      cursor: pointer;
+    }
+    .home-bank-link:active { opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -1214,6 +1501,17 @@
         </div>
       </div>
 
+      <!-- Bank Preview -->
+      <div class="section-card" id="home-bank-card">
+        <div class="section-label">💰 Chore Bank</div>
+        <div id="home-bank-content">
+          <div class="calendar-loading">
+            <span style="font-size:1.1rem;animation:pulse 2s ease-in-out infinite">💰</span>
+            <span>Loading balances...</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Dinner -->
       <div class="section-card">
         <div class="section-label">🍽 Tonight's Dinner</div>
@@ -1271,10 +1569,11 @@
     <!-- ══════════════ BANK SECTION ══════════════ -->
     <div id="section-bank" class="page-section" style="display:none">
       <div class="page-header"><div class="page-header-title">Chore Bank</div></div>
-      <div class="placeholder-content" style="padding-top:40px">
-        <div class="placeholder-icon">💰</div>
-        <div class="placeholder-title">Coming Soon</div>
-        <div class="placeholder-text">Balances, earning history, payouts, and savings goals.</div>
+      <div id="bank-panel-content">
+        <div class="bank-loading">
+          <span style="animation:pulse 2s ease-in-out infinite">💰</span>
+          <span>Loading...</span>
+        </div>
       </div>
     </div>
 
@@ -1310,7 +1609,7 @@
   </div>
 
   <!-- ── FAB (floating add button) ── -->
-  <button class="fab" id="fab" onclick="openAddSheet()">+</button>
+  <button class="fab" id="fab" onclick="handleFabClick()">+</button>
 
   <!-- ── Sheet Overlay ── -->
   <div class="sheet-overlay" id="sheet-overlay" onclick="closeAddSheet()"></div>
@@ -1359,6 +1658,11 @@
     let sheetRecurrence = 'none';
     let sheetRaceMode = false;
     let currentTab    = 'home';
+
+    // Bank state
+    let bankKidId     = null;    // which kid's bank is showing
+    let bankSheetMode = null;    // 'payout' | 'goal'
+    let bankSheetKidId = null;   // kid targeted by open sheet
 
     // ════════════════════════════════════════════════
     //  SESSION
@@ -1456,19 +1760,31 @@
       document.querySelectorAll('.page-section').forEach(s => s.style.display = 'none');
       document.getElementById(`section-${tab}`).style.display = 'block';
 
-      // FAB — only on tasks
+      // FAB — tasks and bank
       const fab = document.getElementById('fab');
       if (tab === 'tasks') {
         fab.classList.add('visible');
         loadTasks();
         subscribeToTasks();
+      } else if (tab === 'bank') {
+        fab.classList.add('visible');
+        unsubscribeFromTasks();
+        loadBank();
       } else {
         fab.classList.remove('visible');
         unsubscribeFromTasks();
       }
 
       // Refresh home preview when returning home
-      if (tab === 'home') updateHomeTasksPreview();
+      if (tab === 'home') {
+        updateHomeTasksPreview();
+        updateHomeBankPreview();
+      }
+    }
+
+    function handleFabClick() {
+      if (currentTab === 'tasks') openAddSheet();
+      else if (currentTab === 'bank') openAddGoalSheet();
     }
 
     // ════════════════════════════════════════════════
@@ -1795,7 +2111,7 @@
       const canNudge  = session.role === 'parent';
 
       const leftReveal  = canNudge
-        ? `<div class="swipe-reveal swipe-reveal-left">${nudgeLabel}</div>` : '';
+        ? `<div class="swipe-reveal swipe-reveal-left">👋 Nudge</div>` : '';
       const rightReveal = canDelete
         ? `<div class="swipe-reveal swipe-reveal-right">🗑 Delete</div>` : '';
       // If neither action available, disable swipe entirely
@@ -2635,6 +2951,344 @@
     }
 
     // ════════════════════════════════════════════════
+    //  CHORE BANK
+    // ════════════════════════════════════════════════
+
+    function bankKids() {
+      return familyMembers.filter(m => m.role === 'kid');
+    }
+
+    async function loadBank() {
+      const el = document.getElementById('bank-panel-content');
+      el.innerHTML = `<div class="bank-loading"><span style="animation:pulse 2s ease-in-out infinite">💰</span><span>Loading...</span></div>`;
+
+      // Determine which kid to show
+      const kids = bankKids();
+      if (kids.length === 0) {
+        el.innerHTML = `<div class="bank-no-tx">No kids found.</div>`;
+        return;
+      }
+
+      // Default: first kid (parents), or self (kids)
+      if (!bankKidId) {
+        bankKidId = session.role === 'kid' ? session.id : kids[0].id;
+      }
+
+      await renderBankPanel();
+    }
+
+    async function renderBankPanel() {
+      const el = document.getElementById('bank-panel-content');
+      const kids = bankKids();
+      const kid = familyMembers.find(m => m.id === bankKidId);
+      if (!kid) return;
+
+      // Fetch data in parallel
+      const [balRes, txRes, goalRes] = await Promise.all([
+        db.from('bank_balances').select('*').eq('family_member_id', bankKidId).single(),
+        db.from('bank_transactions').select('*').eq('family_member_id', bankKidId).order('created_at', { ascending: false }).limit(50),
+        db.from('savings_goals').select('*').eq('family_member_id', bankKidId).order('created_at', { ascending: true })
+      ]);
+
+      const bal   = balRes.data  || { balance: 0, total_earned: 0 };
+      const txs   = txRes.data   || [];
+      const goals = goalRes.data || [];
+
+      const balance     = parseFloat(bal.balance     || 0);
+      const totalEarned = parseFloat(bal.total_earned || 0);
+
+      // Auto-mark achieved goals
+      const unachieved = goals.filter(g => !g.achieved_date && balance >= parseFloat(g.target_amount));
+      for (const g of unachieved) {
+        await db.from('savings_goals').update({ achieved_date: new Date().toISOString() }).eq('id', g.id);
+        g.achieved_date = new Date().toISOString();
+      }
+
+      // Build HTML
+      let html = '';
+
+      // Kid switcher (parents only)
+      if (session.role === 'parent' && kids.length > 1) {
+        html += `<div class="bank-switcher">`;
+        kids.forEach(k => {
+          html += `<div class="bank-kid-pill${k.id === bankKidId ? ' active' : ''}"
+                        onclick="switchBankKid('${k.id}')">
+                     <span class="bank-kid-pill-emoji">${k.emoji}</span>
+                     <span>${k.name}</span>
+                   </div>`;
+        });
+        html += `</div>`;
+      }
+
+      // Hero card
+      const payoutBtn = session.role === 'parent'
+        ? `<div class="bank-payout-btn" onclick="openPayoutSheet('${bankKidId}')">💸 Record payout</div>`
+        : '';
+
+      html += `
+        <div class="bank-hero-card">
+          <div class="bank-hero-label">Current Balance</div>
+          <div class="bank-hero-amount">$${balance.toFixed(2)}</div>
+          <div class="bank-hero-earned">Total earned: $${totalEarned.toFixed(2)}</div>
+          ${payoutBtn}
+        </div>`;
+
+      // Savings Goals section
+      const activeGoals   = goals.filter(g => !g.achieved_date);
+      const achievedGoals = goals.filter(g => !!g.achieved_date);
+      const sortedGoals   = [...activeGoals, ...achievedGoals];
+
+      html += `
+        <div class="tasks-group">
+          <div class="bank-section-header">
+            <span class="bank-section-title">Savings Goals</span>
+            <span class="bank-add-goal-btn" onclick="openAddGoalSheet('${bankKidId}')">＋ Add goal</span>
+          </div>`;
+
+      if (sortedGoals.length === 0) {
+        html += `<div class="bank-no-goals">No savings goals yet — tap + to add one ✨</div>`;
+      } else {
+        sortedGoals.forEach(g => {
+          const target   = parseFloat(g.target_amount);
+          const progress = Math.min(100, Math.round((balance / target) * 100));
+          const isAchieved = !!g.achieved_date;
+          html += `
+            <div class="goal-card${isAchieved ? ' goal-achieved' : ''}">
+              <div class="goal-card-top">
+                <div>
+                  <div class="goal-title-row">
+                    <span class="goal-title">${escHtml(g.title)}</span>
+                    ${isAchieved ? `<span class="goal-achieved-badge">✓ Reached!</span>` : ''}
+                  </div>
+                  <div class="goal-amounts">
+                    <strong>$${balance.toFixed(2)}</strong> of $${target.toFixed(2)}
+                  </div>
+                </div>
+                <span class="goal-delete-btn" onclick="deleteGoal('${g.id}')">✕</span>
+              </div>
+              <div class="goal-bar-track">
+                <div class="goal-bar-fill" style="width:${progress}%"></div>
+              </div>
+              <div class="goal-pct">${isAchieved ? '🎉 Goal reached!' : `${progress}%`}</div>
+            </div>`;
+        });
+      }
+      html += `</div>`;
+
+      // Transaction history
+      html += `
+        <div class="tasks-group">
+          <div class="bank-section-header">
+            <span class="bank-section-title">History</span>
+          </div>
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:4px 16px;">`;
+
+      if (txs.length === 0) {
+        html += `<div class="bank-no-tx">No transactions yet.</div>`;
+      } else {
+        txs.forEach(tx => {
+          const amt    = parseFloat(tx.amount);
+          const isPos  = tx.type === 'earned';
+          const sign   = isPos ? '+' : '−';
+          const cls    = isPos ? 'positive' : 'negative';
+          const d      = new Date(tx.created_at);
+          const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+          html += `
+            <div class="bank-tx-row">
+              <span class="bank-tx-date">${dateStr}</span>
+              <span class="bank-tx-desc">${escHtml(tx.description || (isPos ? 'Earned' : 'Payout'))}</span>
+              <span class="bank-tx-amount ${cls}">${sign}$${Math.abs(amt).toFixed(2)}</span>
+            </div>`;
+        });
+      }
+
+      html += `</div></div>`;
+
+      el.innerHTML = html;
+    }
+
+    async function switchBankKid(kidId) {
+      bankKidId = kidId;
+      await renderBankPanel();
+    }
+
+    // ── Payout sheet ──
+    function openPayoutSheet(kidId) {
+      bankSheetMode  = 'payout';
+      bankSheetKidId = kidId;
+      const kid = familyMembers.find(m => m.id === kidId);
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">Record Payout</div>
+        <div style="font-size:0.85rem;color:var(--text-muted);margin:-14px 0 20px">
+          ${kid ? `${kid.emoji} ${kid.name}` : ''}
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Amount</label>
+          <div class="amount-input-wrap">
+            <span class="amount-prefix">$</span>
+            <input type="number" class="sheet-input" id="bank-payout-amount"
+                   placeholder="0.00" min="0.01" step="0.01">
+          </div>
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Note <span style="opacity:0.45">(optional)</span></label>
+          <input type="text" class="sheet-input" id="bank-payout-note"
+                 placeholder="e.g. Week of Apr 28" maxlength="80">
+        </div>
+        <button class="sheet-save-btn" onclick="submitPayout()">Record Payout</button>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById('bank-payout-amount')?.focus(), 420);
+    }
+
+    async function submitPayout() {
+      const amtStr = (document.getElementById('bank-payout-amount')?.value || '').trim();
+      const amount = parseFloat(amtStr);
+      if (!amount || amount <= 0) {
+        showToast('Enter a valid amount.');
+        return;
+      }
+
+      const note = (document.getElementById('bank-payout-note')?.value || '').trim();
+      const btn  = document.querySelector('.sheet-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const kidId = bankSheetKidId;
+
+      // Get current balance
+      const { data: bal } = await db.from('bank_balances')
+        .select('*').eq('family_member_id', kidId).single();
+
+      if (bal) {
+        const newBalance = Math.max(0, parseFloat(bal.balance) - amount);
+        await db.from('bank_balances').update({
+          balance:    newBalance,
+          updated_at: new Date().toISOString()
+        }).eq('family_member_id', kidId);
+      }
+
+      await db.from('bank_transactions').insert({
+        family_member_id: kidId,
+        amount,
+        type:        'payout',
+        description: note || `Payout — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      });
+
+      const kid = familyMembers.find(m => m.id === kidId);
+      closeAddSheet();
+      showToast(`💸 $${amount.toFixed(2)} payout recorded for ${kid?.name || 'kid'}`);
+      await renderBankPanel();
+      await updateHomeBankPreview();
+    }
+
+    // ── Add Goal sheet ──
+    function openAddGoalSheet(kidId) {
+      bankSheetMode  = 'goal';
+      bankSheetKidId = kidId || bankKidId;
+      const kid = familyMembers.find(m => m.id === bankSheetKidId);
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">New Savings Goal</div>
+        <div style="font-size:0.85rem;color:var(--text-muted);margin:-14px 0 20px">
+          ${kid ? `${kid.emoji} ${kid.name}` : ''}
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Goal Name</label>
+          <input type="text" class="sheet-input" id="bank-goal-title"
+                 placeholder="e.g. New game, AirPods…" maxlength="60">
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Target Amount</label>
+          <div class="amount-input-wrap">
+            <span class="amount-prefix">$</span>
+            <input type="number" class="sheet-input" id="bank-goal-target"
+                   placeholder="0.00" min="1" step="0.50">
+          </div>
+        </div>
+        <button class="sheet-save-btn" onclick="submitGoal()">Add Goal</button>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById('bank-goal-title')?.focus(), 420);
+    }
+
+    async function submitGoal() {
+      const title = (document.getElementById('bank-goal-title')?.value || '').trim();
+      const targetStr = (document.getElementById('bank-goal-target')?.value || '').trim();
+      const target = parseFloat(targetStr);
+
+      if (!title) { showToast('Add a goal name.'); return; }
+      if (!target || target <= 0) { showToast('Enter a target amount.'); return; }
+
+      const btn = document.querySelector('.sheet-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      await db.from('savings_goals').insert({
+        family_member_id: bankSheetKidId,
+        title,
+        target_amount: target,
+        created_by:    session.id
+      });
+
+      closeAddSheet();
+      showToast('Goal added ✓');
+      await renderBankPanel();
+    }
+
+    async function deleteGoal(goalId) {
+      const ok = confirm('Remove this savings goal?');
+      if (!ok) return;
+      await db.from('savings_goals').delete().eq('id', goalId);
+      showToast('Goal removed.');
+      await renderBankPanel();
+    }
+
+    // ── Home bank preview ──
+    async function updateHomeBankPreview() {
+      const el = document.getElementById('home-bank-content');
+      if (!el) return;
+
+      const kids = familyMembers.filter(m => m.role === 'kid');
+      if (kids.length === 0) { el.innerHTML = ''; return; }
+
+      if (session.role === 'kid') {
+        // Single kid — show their own balance
+        const { data: bal } = await db.from('bank_balances')
+          .select('balance').eq('family_member_id', session.id).single();
+        const balance = parseFloat(bal?.balance || 0);
+        el.innerHTML = `
+          <div class="home-bank-solo">
+            <div class="home-bank-solo-balance">$${balance.toFixed(2)}</div>
+            <div class="home-bank-link" onclick="navigate('bank', document.querySelector('[data-tab=bank]'))">View Bank →</div>
+          </div>`;
+      } else {
+        // Parent — show all kids
+        const balPromises = kids.map(k =>
+          db.from('bank_balances').select('balance').eq('family_member_id', k.id).single()
+        );
+        const results = await Promise.all(balPromises);
+
+        let html = `<div class="home-bank-grid">`;
+        kids.forEach((k, i) => {
+          const balance = parseFloat(results[i].data?.balance || 0);
+          html += `
+            <div class="home-bank-kid" onclick="navigate('bank', document.querySelector('[data-tab=bank]'));switchBankKid('${k.id}')">
+              <div class="home-bank-kid-name">${k.emoji} ${k.name}</div>
+              <div class="home-bank-kid-balance" style="color:${k.color_primary}">$${balance.toFixed(2)}</div>
+            </div>`;
+        });
+        html += `</div>`;
+        el.innerHTML = html;
+      }
+    }
+
+    // ════════════════════════════════════════════════
     //  BOOT
     // ════════════════════════════════════════════════
     async function boot() {
@@ -2644,6 +3298,7 @@
       loadWeather();
       loadCalendar();
       updateHomeTasksPreview();
+      updateHomeBankPreview();
     }
 
     boot();
