@@ -49,7 +49,7 @@
       z-index: 1;
       max-width: 480px;
       margin: 0 auto;
-      padding: env(safe-area-inset-top, 48px) 20px env(safe-area-inset-bottom, 80px);
+      padding: env(safe-area-inset-top, 48px) 20px calc(90px + env(safe-area-inset-bottom, 20px));
     }
 
     /* ── Top bar ── */
@@ -244,16 +244,6 @@
       </div>
     </div>
 
-    <!-- Dinner (coming soon) -->
-    <div class="section-card">
-      <div class="section-label">🍽 Tonight's Dinner</div>
-      <div class="placeholder-content">
-        <div class="placeholder-icon">🍽️</div>
-        <div class="placeholder-title">Meal Plan Coming Soon</div>
-        <div class="placeholder-text">Tonight's dinner from your weekly meal plan will show here.</div>
-      </div>
-    </div>
-
     <!-- Tasks (coming soon) -->
     <div class="section-card">
       <div class="section-label">✅ Tasks & Chores Due Today</div>
@@ -261,6 +251,16 @@
         <div class="placeholder-icon">✅</div>
         <div class="placeholder-title">Tasks Coming Soon</div>
         <div class="placeholder-text">Your tasks and chores due today will appear here, sorted by priority.</div>
+      </div>
+    </div>
+
+    <!-- Dinner (coming soon) -->
+    <div class="section-card">
+      <div class="section-label">🍽 Tonight's Dinner</div>
+      <div class="placeholder-content">
+        <div class="placeholder-icon">🍽️</div>
+        <div class="placeholder-title">Meal Plan Coming Soon</div>
+        <div class="placeholder-text">Tonight's dinner from your weekly meal plan will show here.</div>
       </div>
     </div>
 
