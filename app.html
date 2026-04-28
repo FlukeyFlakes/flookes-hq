@@ -1690,6 +1690,93 @@
     }
     .meal-delete-link:active { opacity: 1; }
 
+    /* ══════════════════════════════════════════════
+       SHOPPING LIST
+    ══════════════════════════════════════════════ */
+    .shop-regen-btn {
+      font-size: 0.75rem;
+      color: var(--user-color);
+      cursor: pointer;
+      padding: 6px 12px;
+      border: 1px solid rgba(var(--user-rgb), 0.3);
+      border-radius: 100px;
+      background: rgba(var(--user-rgb), 0.08);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .shop-regen-btn:active { opacity: 0.7; }
+
+    .shop-store-section { margin-bottom: 24px; }
+    .shop-store-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      padding-left: 2px;
+    }
+
+    .shop-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 13px 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background 0.15s ease, opacity 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .shop-item.checked {
+      opacity: 0.45;
+    }
+    .shop-item:active { background: rgba(255,255,255,0.07); }
+
+    .shop-item-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      font-size: 0.7rem;
+      color: transparent;
+    }
+    .shop-item.checked .shop-item-check {
+      background: var(--user-color);
+      border-color: var(--user-color);
+      color: #fff;
+    }
+
+    .shop-item-name {
+      flex: 1;
+      font-size: 0.92rem;
+      color: var(--text);
+      transition: text-decoration 0.15s ease;
+    }
+    .shop-item.checked .shop-item-name {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    .shop-item-source {
+      font-size: 0.68rem;
+      color: var(--text-muted);
+      opacity: 0.5;
+    }
+
+    .shop-empty {
+      text-align: center;
+      padding: 48px 24px;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+
     /* Meal name autocomplete */
     .meal-name-wrap { position: relative; }
     .meal-autocomplete-list {
@@ -1915,11 +2002,15 @@
 
     <!-- ══════════════ SHOP SECTION ══════════════ -->
     <div id="section-shop" class="page-section" style="display:none">
-      <div class="page-header"><div class="page-header-title">Shopping List</div></div>
-      <div class="placeholder-content" style="padding-top:40px">
-        <div class="placeholder-icon">🛒</div>
-        <div class="placeholder-title">Coming Soon</div>
-        <div class="placeholder-text">Live shared list, sorted by store — check it off as you go.</div>
+      <div class="page-header">
+        <div class="page-header-title">Shopping List</div>
+        <div class="shop-regen-btn" id="shop-regen-btn" onclick="generateShoppingList(true)">↺ Refresh</div>
+      </div>
+      <div id="shop-panel-content">
+        <div class="tasks-loading">
+          <span style="animation:pulse 2s ease-in-out infinite">🛒</span>
+          <span>Loading...</span>
+        </div>
       </div>
     </div>
 
@@ -2022,11 +2113,14 @@
     let bankSheetKidId = null;   // kid targeted by open sheet
 
     // Meal state
-    let mealWeekOffset    = 0;       // 0 = current week, +1/-1 = next/prev
-    let mealsRealtime     = null;    // supabase channel
-    let mealSheetDayOfWeek = null;   // 0–6 (Sun–Sat)
-    let mealSheetMealId   = null;    // null = creating, uuid = editing
-    let mealIngRowCount   = 0;       // counter for unique ingredient row IDs
+    let mealWeekOffset    = 0;
+    let mealsRealtime     = null;
+    let mealSheetDayOfWeek = null;
+    let mealSheetMealId   = null;
+    let mealIngRowCount   = 0;
+
+    // Shop state
+    let shopRealtime = null;
 
     // ════════════════════════════════════════════════
     //  SESSION
@@ -2127,6 +2221,7 @@
       // Always clean up subscriptions before setting up new ones
       unsubscribeFromTasks();
       unsubscribeFromMeals();
+      unsubscribeFromShop();
 
       // FAB + panel hooks
       const fab = document.getElementById('fab');
@@ -2141,6 +2236,10 @@
         fab.classList.remove('visible');
         loadMeals();
         subscribeToMeals();
+      } else if (tab === 'shop') {
+        fab.classList.add('visible');
+        loadShop();
+        subscribeToShop();
       } else {
         fab.classList.remove('visible');
       }
@@ -2156,6 +2255,7 @@
     function handleFabClick() {
       if (currentTab === 'tasks') openAddSheet();
       else if (currentTab === 'bank') openAddGoalSheet();
+      else if (currentTab === 'shop') openAddShopItemSheet();
     }
 
     // ════════════════════════════════════════════════
@@ -3656,6 +3756,209 @@
         });
         html += `</div>`;
         el.innerHTML = html;
+      }
+    }
+
+    // ════════════════════════════════════════════════
+    //  SHOPPING LIST
+    // ════════════════════════════════════════════════
+
+    const STORE_ORDER = ['tj', 'costco', 'wf', 'other'];
+    const STORE_LABELS = { tj: "Trader Joe's", costco: 'Costco', wf: 'Whole Foods', other: 'Other' };
+
+    async function loadShop() {
+      document.getElementById('shop-panel-content').innerHTML =
+        `<div class="tasks-loading"><span style="animation:pulse 2s ease-in-out infinite">🛒</span><span>Loading...</span></div>`;
+
+      const weekStart = getMealWeekStartDate(0);
+
+      // Check if list exists for this week
+      const { data: existing } = await db.from('shopping_list_items')
+        .select('id').eq('week_start_date', weekStart).limit(1);
+
+      if (!existing || existing.length === 0) {
+        await generateShoppingList(false);
+      } else {
+        await renderShopPanel(weekStart);
+      }
+    }
+
+    async function generateShoppingList(force) {
+      const weekStart = getMealWeekStartDate(0);
+
+      if (force) {
+        // Delete only meal-derived items; keep manual ones
+        await db.from('shopping_list_items')
+          .delete()
+          .eq('week_start_date', weekStart)
+          .eq('source', 'meal');
+      }
+
+      // Fetch all meals for this week
+      const { data: meals } = await db.from('meals')
+        .select('id').eq('week_start_date', weekStart);
+
+      const mealIds = (meals || []).map(m => m.id);
+
+      if (mealIds.length > 0) {
+        const { data: ings } = await db.from('ingredients')
+          .select('name, store').in('meal_id', mealIds);
+
+        // Filter out have_it, deduplicate by name+store
+        const seen = new Set();
+        const toInsert = [];
+        (ings || []).forEach(ing => {
+          if (ing.store === 'have_it') return;
+          const key = `${ing.name.toLowerCase()}|${ing.store}`;
+          if (seen.has(key)) return;
+          seen.add(key);
+          toInsert.push({
+            week_start_date: weekStart,
+            name:            ing.name,
+            store:           ing.store || 'other',
+            source:          'meal',
+            checked:         false
+          });
+        });
+
+        if (toInsert.length > 0) {
+          await db.from('shopping_list_items').insert(toInsert);
+        }
+      }
+
+      await renderShopPanel(weekStart);
+    }
+
+    async function renderShopPanel(weekStart) {
+      const { data: items } = await db.from('shopping_list_items')
+        .select('*').eq('week_start_date', weekStart)
+        .order('created_at');
+
+      if (!items || items.length === 0) {
+        document.getElementById('shop-panel-content').innerHTML =
+          `<div class="shop-empty">No items yet — meals will populate this list automatically.<br><br>Tap + to add something manually.</div>`;
+        return;
+      }
+
+      // Group by store, exclude have_it
+      const grouped = {};
+      STORE_ORDER.forEach(s => grouped[s] = []);
+      items.forEach(item => {
+        const s = item.store || 'other';
+        if (s === 'have_it') return;
+        if (!grouped[s]) grouped['other'].push(item);
+        else grouped[s].push(item);
+      });
+
+      let html = '';
+      STORE_ORDER.forEach(store => {
+        const list = grouped[store];
+        if (list.length === 0) return;
+        html += `<div class="shop-store-section">
+          <div class="shop-store-label">🛒 ${STORE_LABELS[store]}</div>`;
+        list.forEach(item => {
+          const checked = item.checked ? ' checked' : '';
+          html += `
+            <div class="shop-item${checked}" onclick="toggleShopItem('${item.id}', ${!item.checked})">
+              <div class="shop-item-check">${item.checked ? '✓' : ''}</div>
+              <div class="shop-item-name">${escHtml(item.name)}</div>
+              ${item.source === 'manual' ? `<div class="shop-item-source">manual</div>` : ''}
+            </div>`;
+        });
+        html += `</div>`;
+      });
+
+      document.getElementById('shop-panel-content').innerHTML = html;
+    }
+
+    async function toggleShopItem(id, checked) {
+      // Optimistic UI
+      const el = document.querySelector(`[onclick*="${id}"]`);
+      if (el) {
+        el.classList.toggle('checked', checked);
+        el.querySelector('.shop-item-check').textContent = checked ? '✓' : '';
+        el.querySelector('.shop-item-name').style.textDecoration = checked ? 'line-through' : '';
+      }
+      await db.from('shopping_list_items').update({
+        checked,
+        checked_by: session.id,
+        checked_at: new Date().toISOString()
+      }).eq('id', id);
+    }
+
+    function openAddShopItemSheet() {
+      const storeOptions = [
+        { key: 'tj',     label: "TJ's"   },
+        { key: 'costco', label: 'Costco' },
+        { key: 'wf',     label: 'WF'     },
+        { key: 'other',  label: 'Other'  }
+      ];
+
+      const storePills = storeOptions.map((s, i) =>
+        `<div class="meal-store-pill${i === 3 ? ' active' : ''}"
+              data-store="${s.key}"
+              onclick="selectShopStorePill(this)">${s.label}</div>`
+      ).join('');
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">Add Item</div>
+        <div class="sheet-field">
+          <label class="sheet-label">Item</label>
+          <input type="text" class="sheet-input" id="sheet-shop-item-name"
+                 placeholder="e.g. Paper towels" maxlength="80">
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Store</label>
+          <div class="meal-ing-store-pills" id="shop-store-pills" style="gap:8px">${storePills}</div>
+        </div>
+        <button class="sheet-save-btn" onclick="saveManualShopItem()">Add to List</button>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById('sheet-shop-item-name')?.focus(), 420);
+    }
+
+    function selectShopStorePill(el) {
+      document.querySelectorAll('#shop-store-pills .meal-store-pill')
+        .forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    async function saveManualShopItem() {
+      const name = (document.getElementById('sheet-shop-item-name')?.value || '').trim();
+      if (!name) { showToast('Add an item name.'); return; }
+
+      const store = document.querySelector('#shop-store-pills .meal-store-pill.active')
+        ?.dataset?.store || 'other';
+      const weekStart = getMealWeekStartDate(0);
+
+      await db.from('shopping_list_items').insert({
+        week_start_date: weekStart,
+        name, store,
+        source:  'manual',
+        checked: false
+      });
+
+      closeAddSheet();
+      showToast('Item added ✓');
+      await renderShopPanel(weekStart);
+    }
+
+    // ── Real-time ──
+    function subscribeToShop() {
+      if (shopRealtime) return;
+      shopRealtime = db.channel('shop-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'shopping_list_items' }, () => {
+          if (currentTab === 'shop') renderShopPanel(getMealWeekStartDate(0));
+        })
+        .subscribe();
+    }
+
+    function unsubscribeFromShop() {
+      if (shopRealtime) {
+        db.removeChannel(shopRealtime);
+        shopRealtime = null;
       }
     }
 
