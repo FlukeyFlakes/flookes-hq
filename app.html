@@ -3788,12 +3788,8 @@
       row.dataset.idx = idx;
       row.innerHTML = `
         <div class="meal-ing-inputs">
-          <div class="meal-ing-row-top">
-            <input type="text" class="sheet-input-sm meal-ing-name-input"
-                   placeholder="Ingredient" maxlength="60" value="${escHtml(name)}">
-            <input type="text" class="sheet-input-sm meal-ing-qty-input"
-                   placeholder="Qty" maxlength="20" value="${escHtml(qty)}">
-          </div>
+          <input type="text" class="sheet-input-sm meal-ing-name-input"
+                 placeholder="e.g. 1 lb ground turkey" maxlength="80" value="${escHtml(name)}">
           <div class="meal-ing-store-pills" id="store-pills-${idx}">${storePills}</div>
         </div>
         <div class="meal-ing-remove" onclick="removeIngredientRow(this)">✕</div>
@@ -3858,9 +3854,8 @@
         const toInsert = [];
         rows.forEach(row => {
           const name  = (row.querySelector('.meal-ing-name-input')?.value || '').trim();
-          const qty   = (row.querySelector('.meal-ing-qty-input')?.value  || '').trim();
           const store = row.querySelector('.meal-store-pill.active')?.dataset?.store || 'other';
-          if (name) toInsert.push({ meal_id: mealId, name, quantity: qty || null, store_tag: store });
+          if (name) toInsert.push({ meal_id: mealId, name, quantity: null, store_tag: store });
         });
 
         if (toInsert.length > 0) {
