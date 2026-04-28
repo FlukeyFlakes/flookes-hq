@@ -3770,10 +3770,11 @@
       const store = existing?.store_tag || 'other';
 
       const storeOptions = [
-        { key: 'tj',     label: "TJ's"    },
-        { key: 'costco', label: 'Costco'  },
-        { key: 'wf',     label: 'WF'      },
-        { key: 'other',  label: 'Other'   }
+        { key: 'tj',      label: "TJ's"    },
+        { key: 'costco',  label: 'Costco'  },
+        { key: 'wf',      label: 'WF'      },
+        { key: 'other',   label: 'Other'   },
+        { key: 'have_it', label: 'Have It' }
       ];
 
       const storePills = storeOptions.map(s =>
@@ -3829,21 +3830,25 @@
       try {
         if (mealId) {
           // Update existing meal name
-          await db.from('meals').update({
-            name:       mealName,
-            updated_at: new Date().toISOString()
-          }).eq('id', mealId);
+          await db.from('meals').update({ name: mealName }).eq('id', mealId);
         } else {
-          // Insert new meal
-          const { data, error } = await db.from('meals').insert({
+          // Insert new meal, then query back for the ID
+          // (chaining .select().single() on insert can return null data with some RLS configs)
+          const { error: insertError } = await db.from('meals').insert({
             week_start_date: weekStart,
             day_of_week:     mealSheetDayOfWeek,
             name:            mealName,
             created_by:      session.id
-          }).select().single();
+          });
+          if (insertError) throw insertError;
 
-          if (error) throw error;
-          mealId = data.id;
+          const { data: newMeal, error: queryError } = await db.from('meals')
+            .select('id')
+            .eq('week_start_date', weekStart)
+            .eq('day_of_week', mealSheetDayOfWeek)
+            .single();
+          if (queryError || !newMeal) throw queryError || new Error('Could not retrieve saved meal');
+          mealId = newMeal.id;
         }
 
         // Delete all existing ingredients and re-insert fresh
