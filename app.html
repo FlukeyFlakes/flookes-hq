@@ -3767,7 +3767,7 @@
       const idx   = mealIngRowCount++;
       const name  = existing?.name  || '';
       const qty   = existing?.quantity || '';
-      const store = existing?.store_tag || 'other';
+      const store = existing?.store || 'other';
 
       const storeOptions = [
         { key: 'tj',      label: "TJ's"    },
@@ -3855,7 +3855,7 @@
         rows.forEach(row => {
           const name  = (row.querySelector('.meal-ing-name-input')?.value || '').trim();
           const store = row.querySelector('.meal-store-pill.active')?.dataset?.store || 'other';
-          if (name) toInsert.push({ meal_id: mealId, name, quantity: null, store_tag: store });
+          if (name) toInsert.push({ meal_id: mealId, name, quantity: null, store: store });
         });
 
         if (toInsert.length > 0) {
