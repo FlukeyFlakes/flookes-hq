@@ -3850,7 +3850,11 @@
         else grouped[s].push(item);
       });
 
-      let html = '';
+      const hasChecked = items.some(i => i.checked);
+      let html = hasChecked
+        ? `<div style="text-align:right;margin-bottom:16px">
+             <div class="shop-regen-btn" onclick="clearCheckedItems()" style="display:inline-block">✕ Clear checked</div>
+           </div>` : '';
       STORE_ORDER.forEach(store => {
         const list = grouped[store];
         if (list.length === 0) return;
@@ -3872,18 +3876,22 @@
     }
 
     async function toggleShopItem(id, checked) {
-      // Optimistic UI
-      const el = document.querySelector(`[onclick*="${id}"]`);
-      if (el) {
-        el.classList.toggle('checked', checked);
-        el.querySelector('.shop-item-check').textContent = checked ? '✓' : '';
-        el.querySelector('.shop-item-name').style.textDecoration = checked ? 'line-through' : '';
-      }
       await db.from('shopping_list_items').update({
         checked,
-        checked_by: session.id,
-        checked_at: new Date().toISOString()
+        checked_by: checked ? session.id : null,
+        checked_at: checked ? new Date().toISOString() : null
       }).eq('id', id);
+      // Re-render to update clear button visibility
+      await renderShopPanel(getMealWeekStartDate(0));
+    }
+
+    async function clearCheckedItems() {
+      const weekStart = getMealWeekStartDate(0);
+      await db.from('shopping_list_items')
+        .delete()
+        .eq('week_start_date', weekStart)
+        .eq('checked', true);
+      await renderShopPanel(weekStart);
     }
 
     function openAddShopItemSheet() {
