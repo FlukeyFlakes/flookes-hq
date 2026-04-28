@@ -115,6 +115,112 @@
       margin-top: 6px;
     }
 
+    /* ── Weather Widget ── */
+    .weather-card {
+      background: linear-gradient(135deg, rgba(30,60,100,0.35) 0%, rgba(10,10,12,0.6) 100%);
+      border: 1px solid rgba(100,160,255,0.15);
+      border-radius: var(--radius);
+      padding: 20px;
+      margin-bottom: 16px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .weather-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 12px 0;
+    }
+    .weather-loading-icon { font-size: 1.4rem; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    .weather-today {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .weather-location {
+      font-size: 0.65rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: rgba(140,190,255,0.7);
+      margin-bottom: 6px;
+    }
+
+    .weather-temp {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3.8rem;
+      font-weight: 300;
+      line-height: 1;
+      color: var(--text);
+      letter-spacing: -0.02em;
+    }
+
+    .weather-desc {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      text-transform: capitalize;
+    }
+
+    .weather-hi-lo {
+      font-size: 0.75rem;
+      color: rgba(240,238,232,0.35);
+      margin-top: 4px;
+    }
+
+    .weather-icon-big {
+      font-size: 4rem;
+      line-height: 1;
+      filter: drop-shadow(0 0 20px rgba(100,180,255,0.3));
+    }
+
+    .weather-divider {
+      height: 1px;
+      background: rgba(255,255,255,0.06);
+      margin: 16px 0;
+    }
+
+    .weather-forecast {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+
+    .forecast-day {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 12px;
+      padding: 10px 6px;
+    }
+
+    .forecast-name {
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .forecast-icon { font-size: 1.6rem; line-height: 1; }
+
+    .forecast-hi {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .forecast-lo {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
     /* ── Section card ── */
     .section-card {
       background: var(--surface);
@@ -224,13 +330,28 @@
       <div class="greeting-sub" id="greeting-sub">Here's your day at a glance.</div>
     </div>
 
-    <!-- Weather (coming soon) -->
-    <div class="section-card">
-      <div class="section-label">🌤 Weather · Napa, CA</div>
-      <div class="placeholder-content">
-        <div class="placeholder-icon">🌤️</div>
-        <div class="placeholder-title">Weather Coming Soon</div>
-        <div class="placeholder-text">The live weather widget will show today's forecast and a 3-day outlook for Napa, CA.</div>
+    <!-- Weather Widget -->
+    <div class="weather-card" id="weather-card">
+      <div class="weather-loading" id="weather-loading">
+        <span class="weather-loading-icon">🌤️</span>
+        <span>Loading weather...</span>
+      </div>
+      <div class="weather-content" id="weather-content" style="display:none">
+        <!-- Today -->
+        <div class="weather-today">
+          <div class="weather-left">
+            <div class="weather-location">📍 Napa, CA</div>
+            <div class="weather-temp" id="weather-temp">--°</div>
+            <div class="weather-desc" id="weather-desc">--</div>
+            <div class="weather-hi-lo" id="weather-hi-lo">H: --° · L: --°</div>
+          </div>
+          <div class="weather-icon-big" id="weather-icon-big">🌤️</div>
+        </div>
+        <!-- 3-day outlook -->
+        <div class="weather-divider"></div>
+        <div class="weather-forecast" id="weather-forecast">
+          <!-- Injected by JS -->
+        </div>
       </div>
     </div>
 
@@ -377,6 +498,91 @@
       document.getElementById('greeting-sub').textContent = dateStr;
     }
 
+    // ── Weather ───────────────────────────────────────────────
+    // Napa, CA coordinates
+    const WEATHER_LAT = 38.2975;
+    const WEATHER_LON = -122.2869;
+
+    function weatherCodeToEmoji(code) {
+      if (code === 0) return '☀️';
+      if (code <= 2) return '⛅';
+      if (code === 3) return '☁️';
+      if (code <= 49) return '🌫️';
+      if (code <= 59) return '🌦️';
+      if (code <= 69) return '🌧️';
+      if (code <= 79) return '❄️';
+      if (code <= 84) return '🌧️';
+      if (code <= 99) return '⛈️';
+      return '🌤️';
+    }
+
+    function weatherCodeToDesc(code) {
+      if (code === 0) return 'Clear skies';
+      if (code === 1) return 'Mostly clear';
+      if (code === 2) return 'Partly cloudy';
+      if (code === 3) return 'Overcast';
+      if (code <= 49) return 'Foggy';
+      if (code <= 59) return 'Drizzle';
+      if (code <= 69) return 'Rainy';
+      if (code <= 79) return 'Snow';
+      if (code <= 84) return 'Rain showers';
+      if (code <= 99) return 'Thunderstorms';
+      return 'Mixed';
+    }
+
+    function getDayName(dateStr, index) {
+      if (index === 0) return 'Today';
+      const d = new Date(dateStr + 'T12:00:00');
+      return d.toLocaleDateString('en-US', { weekday: 'short' });
+    }
+
+    async function loadWeather() {
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=4`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        const cur = data.current;
+        const daily = data.daily;
+
+        // Today
+        const temp = Math.round(cur.temperature_2m);
+        const code = cur.weather_code;
+        const hi = Math.round(daily.temperature_2m_max[0]);
+        const lo = Math.round(daily.temperature_2m_min[0]);
+
+        document.getElementById('weather-temp').textContent = `${temp}°`;
+        document.getElementById('weather-desc').textContent = weatherCodeToDesc(code);
+        document.getElementById('weather-hi-lo').textContent = `H: ${hi}° · L: ${lo}°`;
+        document.getElementById('weather-icon-big').textContent = weatherCodeToEmoji(code);
+
+        // 3-day forecast (days 1, 2, 3 — skip today which is index 0)
+        const forecastEl = document.getElementById('weather-forecast');
+        forecastEl.innerHTML = '';
+        for (let i = 1; i <= 3; i++) {
+          const dayName = getDayName(daily.time[i], i);
+          const dayHi = Math.round(daily.temperature_2m_max[i]);
+          const dayLo = Math.round(daily.temperature_2m_min[i]);
+          const dayCode = daily.weather_code[i];
+          forecastEl.innerHTML += `
+            <div class="forecast-day">
+              <div class="forecast-name">${dayName}</div>
+              <div class="forecast-icon">${weatherCodeToEmoji(dayCode)}</div>
+              <div class="forecast-hi">${dayHi}°</div>
+              <div class="forecast-lo">${dayLo}°</div>
+            </div>`;
+        }
+
+        // Show content
+        document.getElementById('weather-loading').style.display = 'none';
+        document.getElementById('weather-content').style.display = 'block';
+
+      } catch(e) {
+        document.getElementById('weather-loading').innerHTML =
+          '<span>🌥️</span><span style="color:var(--text-muted)">Weather unavailable</span>';
+      }
+    }
+
     // ── Navigation (placeholder) ─────────────────────────────
     function navigate(tab) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -386,6 +592,7 @@
 
     // ── Boot ─────────────────────────────────────────────────
     loadSession();
+    loadWeather();
   </script>
 </body>
 </html>
