@@ -828,6 +828,21 @@
       color: var(--text-muted);
     }
 
+    .race-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      color: #F59E0B;
+      background: rgba(245,158,11,0.12);
+      border: 1px solid rgba(245,158,11,0.3);
+      border-radius: 100px;
+      padding: 2px 8px;
+      white-space: nowrap;
+    }
+
     /* ── FAB ── */
     .fab {
       position: fixed;
@@ -1284,6 +1299,7 @@
     let sheetPriority = 'medium';
     let sheetAssignTo = null;    // UUID
     let sheetRecurrence = 'none';
+    let sheetRaceMode = false;
     let currentTab    = 'home';
 
     // ════════════════════════════════════════════════
@@ -1423,9 +1439,19 @@
     //  TASKS — FETCH
     // ════════════════════════════════════════════════
     async function fetchTasks() {
-      let q = db.from('tasks').select('*').order('created_at', { ascending: false });
-      if (session.role === 'kid') q = q.eq('assigned_to', session.id);
-      const { data } = await q;
+      if (session.role === 'kid') {
+        // Kids see: their own tasks/chores + any open race chores not yet claimed
+        const [ownRes, raceRes] = await Promise.all([
+          db.from('tasks').select('*').eq('assigned_to', session.id).order('created_at', { ascending: false }),
+          db.from('tasks').select('*').eq('open_to_kids', true).is('completed_at', null).order('created_at', { ascending: false })
+        ]);
+        const own   = ownRes.data  || [];
+        const race  = raceRes.data || [];
+        // Merge, deduplicate by id
+        const seen = new Set(own.map(t => t.id));
+        return [...own, ...race.filter(t => !seen.has(t.id))];
+      }
+      const { data } = await db.from('tasks').select('*').order('created_at', { ascending: false });
       return data || [];
     }
 
@@ -1681,8 +1707,16 @@
         rightHtml += `<button class="approve-btn" onclick="approveChore('${task.id}')">✓ Approve</button>`;
       }
 
+      // Race badge — show on open_to_kids chores
+      const raceBadge = (task.open_to_kids && !task.completed_at)
+        ? `<span class="race-badge">🏆 First done wins</span>` : '';
+
       // Meta line
-      const assignee    = session.role === 'parent' ? `${memberEmoji(task.assigned_to)} ${memberName(task.assigned_to)}` : '';
+      const assignee = session.role === 'parent'
+        ? (task.open_to_kids && !task.assigned_to
+            ? `🎮 🌷 Both kids`
+            : `${memberEmoji(task.assigned_to)} ${memberName(task.assigned_to)}`)
+        : '';
       const assigneePart = assignee ? `<span>${assignee}</span>` : '';
       let duePart = '';
       if (task.due_date) {
@@ -1707,6 +1741,7 @@
             <div class="priority-dot ${task.priority}"></div>
             <div class="task-body">
               <div class="task-title">${escHtml(task.title)}</div>
+              ${raceBadge ? `<div style="margin-top:4px">${raceBadge}</div>` : ''}
               <div class="task-meta">${[assigneePart, duePart].filter(Boolean).join('<span style="margin:0 3px;opacity:0.3">·</span>')}</div>
             </div>
             <div class="task-right">${rightHtml}</div>
@@ -1797,14 +1832,38 @@
       if (!task) return;
 
       if (task.is_chore) {
-        // Kid marks chore done → pending approval
-        const canMark = session.role === 'kid' && task.assigned_to === session.id && !task.completed_at;
-        if (!canMark) return;
-        await db.from('tasks').update({
-          completed_at: new Date().toISOString(),
-          completed_by: session.id
-        }).eq('id', taskId);
-        showToast('Marked done — waiting for approval ⏳');
+        // ── Race chore: first kid to tap wins ──
+        if (task.open_to_kids) {
+          // Atomic claim: only succeeds if completed_at is still null
+          const { data, error } = await db.from('tasks')
+            .update({
+              completed_at: new Date().toISOString(),
+              completed_by: session.id,
+              assigned_to:  session.id,
+              open_to_kids: false
+            })
+            .eq('id', taskId)
+            .is('completed_at', null)
+            .select();
+
+          if (error || !data || data.length === 0) {
+            // Someone beat them to it
+            const winner = allTasks.find(t => t.id === taskId);
+            const winnerName = winner ? memberName(winner.completed_by) : 'someone';
+            showToast(`${winnerName} already got this one! 🏃`);
+          } else {
+            showToast('Chore claimed! Waiting for approval ⏳');
+          }
+        } else {
+          // Normal chore: kid marks their own done
+          const canMark = session.role === 'kid' && task.assigned_to === session.id && !task.completed_at;
+          if (!canMark) return;
+          await db.from('tasks').update({
+            completed_at: new Date().toISOString(),
+            completed_by: session.id
+          }).eq('id', taskId);
+          showToast('Marked done — waiting for approval ⏳');
+        }
       } else {
         // Task → complete immediately
         const canComplete = session.role === 'parent' ||
@@ -1991,6 +2050,7 @@
       sheetPriority  = 'medium';
       sheetAssignTo  = session.role === 'kid' ? session.id : null;
       sheetRecurrence = 'none';
+      sheetRaceMode  = false;
 
       renderAddSheet();
 
@@ -2061,6 +2121,18 @@
               <div class="sel-pill" onclick="setRecurrence('sunday', this)">Sun</div>
             </div>
           </div>
+          <div class="sheet-field">
+            <div class="sheet-toggle-row" style="background:rgba(245,158,11,0.07);border-color:rgba(245,158,11,0.2)">
+              <div class="sheet-toggle-info">
+                <div class="sheet-toggle-label">🏆 First one done wins</div>
+                <div class="sheet-toggle-sub">Both kids see it — whoever finishes first gets the money</div>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="race-toggle" onchange="setRaceMode(this.checked)">
+                <div class="toggle-track"></div>
+              </label>
+            </div>
+          </div>
         </div>` : '';
 
       document.getElementById('sheet-body').innerHTML = `
@@ -2125,6 +2197,16 @@
       el.classList.add('active');
     }
 
+    function setRaceMode(on) {
+      sheetRaceMode = on;
+      // Hide/show assignee pills when race mode toggled
+      const assigneeField = document.querySelector('#assignee-pills')?.closest('.sheet-field');
+      if (assigneeField) {
+        assigneeField.style.opacity  = on ? '0.4' : '1';
+        assigneeField.style.pointerEvents = on ? 'none' : '';
+      }
+    }
+
     async function saveTask() {
       const title = (document.getElementById('sheet-title-input')?.value || '').trim();
       if (!title) {
@@ -2141,7 +2223,9 @@
       const dueVal = document.getElementById('sheet-due')?.value;
       const amountVal = parseFloat(document.getElementById('sheet-amount')?.value || '0') || 0;
       const desc = (document.getElementById('sheet-desc')?.value || '').trim();
-      const assignTo = sheetAssignTo || (session.role === 'kid' ? session.id : familyMembers[0]?.id);
+      const assignTo = sheetRaceMode
+        ? null
+        : (sheetAssignTo || (session.role === 'kid' ? session.id : familyMembers[0]?.id));
 
       const record = {
         title,
@@ -2153,7 +2237,8 @@
         chore_amount:       sheetIsChore ? amountVal : 0,
         is_recurring:       isRecurring,
         recurrence_pattern: isRecurring ? sheetRecurrence : null,
-        due_date:           dueVal ? new Date(dueVal + 'T23:59:00').toISOString() : null
+        due_date:           dueVal ? new Date(dueVal + 'T23:59:00').toISOString() : null,
+        open_to_kids:       sheetIsChore && sheetRaceMode
       };
 
       const { error } = await db.from('tasks').insert(record);
