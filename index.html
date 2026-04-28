@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Flookes HQ">
+  <meta name="theme-color" content="#0A0A0C">
+  <title>Flookes HQ</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0A0A0C;
+      --bg2: #111116;
+      --surface: rgba(255,255,255,0.04);
+      --border: rgba(255,255,255,0.08);
+      --text: #F0EEE8;
+      --text-muted: rgba(240,238,232,0.45);
+      --gold: #D4A017;
+      --radius: 20px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      -webkit-font-smoothing: antialiased;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* ── Background texture ── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(212,160,23,0.06) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 80% at 80% 90%, rgba(107,53,200,0.05) 0%, transparent 60%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ── Loading screen ── */
+    #loading {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      background: var(--bg);
+      transition: opacity 0.5s ease;
+    }
+    #loading.fade-out { opacity: 0; pointer-events: none; }
+
+    .loading-emblem {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3rem;
+      font-weight: 700;
+      letter-spacing: 0.15em;
+      color: var(--gold);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .loading-sub {
+      font-size: 0.75rem;
+      letter-spacing: 0.3em;
+      color: var(--text-muted);
+      margin-top: 8px;
+      text-transform: uppercase;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    /* ── Main login screen ── */
+    #login-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: env(safe-area-inset-top, 20px) 24px env(safe-area-inset-bottom, 20px);
+      z-index: 10;
+      opacity: 0;
+      transform: translateY(16px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    #login-screen.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ── Header ── */
+    .header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+    .app-wordmark {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 3rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      line-height: 1;
+    }
+    .app-wordmark .flookes { color: var(--text); }
+    .app-wordmark .hq { color: var(--gold); }
+    .header-tagline {
+      font-size: 0.7rem;
+      letter-spacing: 0.35em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .header-datetime {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 12px;
+      font-weight: 300;
+    }
+
+    /* ── Who's there label ── */
+    .whos-there {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+
+    /* ── Profile grid ── */
+    .profile-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    .profile-card {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px 20px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+      -webkit-tap-highlight-color: transparent;
+      overflow: hidden;
+    }
+
+    .profile-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: radial-gradient(ellipse at 50% 0%, var(--card-color) 0%, transparent 70%);
+      opacity: 0.12;
+      transition: opacity 0.2s ease;
+    }
+
+    .profile-card:active {
+      transform: scale(0.95);
+    }
+
+    .profile-card:active::before { opacity: 0.22; }
+
+    .card-glow {
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      border: 1px solid var(--card-color);
+      opacity: 0.3;
+      pointer-events: none;
+    }
+
+    .card-emoji {
+      font-size: 3rem;
+      line-height: 1;
+      margin-bottom: 10px;
+      filter: drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    }
+
+    .card-name {
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 1rem;
+      color: var(--card-color);
+      letter-spacing: 0.02em;
+    }
+
+    .card-role {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* ── PIN Modal ── */
+    #pin-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+    }
+
+    #pin-modal.open {
+      opacity: 1;
+      pointer-events: all;
+    }
+
+    .modal-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+
+    .modal-sheet {
+      position: relative;
+      width: 100%;
+      max-width: 420px;
+      background: #16161A;
+      border-radius: 28px 28px 0 0;
+      padding: 20px 24px env(safe-area-inset-bottom, 24px);
+      transform: translateY(100%);
+      transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border-top: 1px solid rgba(255,255,255,0.08);
+    }
+
+    #pin-modal.open .modal-sheet {
+      transform: translateY(0);
+    }
+
+    .modal-handle {
+      width: 36px;
+      height: 4px;
+      background: rgba(255,255,255,0.15);
+      border-radius: 2px;
+      margin: 0 auto 20px;
+    }
+
+    .modal-user-header {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+
+    .modal-emoji {
+      font-size: 3rem;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    .modal-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.6rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .modal-hint {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }
+
+    /* ── PIN dots ── */
+    .pin-dots {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .pin-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.2);
+      background: transparent;
+      transition: all 0.15s ease;
+    }
+
+    .pin-dot.filled {
+      border-color: var(--modal-color);
+      background: var(--modal-color);
+      transform: scale(1.1);
+    }
+
+    .pin-dot.error {
+      border-color: #E05252;
+      background: #E05252;
+    }
+
+    .pin-dots.shake {
+      animation: shake 0.4s cubic-bezier(.36,.07,.19,.97);
+    }
+
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-8px); }
+      40% { transform: translateX(8px); }
+      60% { transform: translateX(-6px); }
+      80% { transform: translateX(6px); }
+    }
+
+    /* ── Number pad ── */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .num-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 64px;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.07);
+      cursor: pointer;
+      transition: background 0.1s ease, transform 0.1s ease;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+
+    .num-btn:active {
+      background: rgba(255,255,255,0.12);
+      transform: scale(0.94);
+    }
+
+    .num-btn.empty { background: transparent; border: none; cursor: default; }
+    .num-btn.empty:active { transform: none; }
+
+    .num-digit {
+      font-family: 'DM Sans', sans-serif;
+      font-size: 1.4rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .num-letters {
+      font-size: 0.55rem;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .num-btn.delete .num-digit { font-size: 1.1rem; }
+
+    /* ── Cancel button ── */
+    .cancel-btn {
+      width: 100%;
+      padding: 14px;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      color: var(--text-muted);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .cancel-btn:active { background: rgba(255,255,255,0.06); }
+
+    /* ── Error / lockout message ── */
+    .modal-error {
+      text-align: center;
+      font-size: 0.8rem;
+      color: #E05252;
+      margin-bottom: 12px;
+      min-height: 20px;
+      letter-spacing: 0.05em;
+    }
+
+    /* ── Lockout screen (inside modal) ── */
+    .lockout-msg {
+      text-align: center;
+      padding: 20px 0;
+    }
+    .lockout-msg .lock-icon { font-size: 2rem; margin-bottom: 8px; }
+    .lockout-msg p {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .lockout-msg strong { color: #E05252; }
+
+    /* ── Footer ── */
+    .login-footer {
+      position: fixed;
+      bottom: env(safe-area-inset-bottom, 16px);
+      left: 0; right: 0;
+      text-align: center;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: rgba(240,238,232,0.2);
+      text-transform: uppercase;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="loading-emblem">FHQ</div>
+    <div class="loading-sub">Flookes HQ</div>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="header">
+      <div class="app-wordmark">
+        <span class="flookes">Flookes</span> <span class="hq">HQ</span>
+      </div>
+      <div class="header-tagline">Family Command Center</div>
+      <div class="header-datetime" id="datetime"></div>
+    </div>
+
+    <div class="whos-there">Who's there?</div>
+
+    <div class="profile-grid" id="profile-grid">
+      <!-- Cards injected by JS -->
+    </div>
+  </div>
+
+  <!-- PIN Modal -->
+  <div id="pin-modal">
+    <div class="modal-backdrop" id="modal-backdrop"></div>
+    <div class="modal-sheet">
+      <div class="modal-handle"></div>
+      <div class="modal-user-header">
+        <div class="modal-emoji" id="modal-emoji"></div>
+        <div class="modal-name" id="modal-name"></div>
+        <div class="modal-hint">Enter your PIN</div>
+      </div>
+
+      <div class="pin-dots" id="pin-dots">
+        <div class="pin-dot" id="dot-0"></div>
+        <div class="pin-dot" id="dot-1"></div>
+        <div class="pin-dot" id="dot-2"></div>
+        <div class="pin-dot" id="dot-3"></div>
+      </div>
+
+      <div class="modal-error" id="modal-error"></div>
+
+      <div class="numpad" id="numpad">
+        <button class="num-btn" data-n="1"><span class="num-digit">1</span><span class="num-letters"></span></button>
+        <button class="num-btn" data-n="2"><span class="num-digit">2</span><span class="num-letters">ABC</span></button>
+        <button class="num-btn" data-n="3"><span class="num-digit">3</span><span class="num-letters">DEF</span></button>
+        <button class="num-btn" data-n="4"><span class="num-digit">4</span><span class="num-letters">GHI</span></button>
+        <button class="num-btn" data-n="5"><span class="num-digit">5</span><span class="num-letters">JKL</span></button>
+        <button class="num-btn" data-n="6"><span class="num-digit">6</span><span class="num-letters">MNO</span></button>
+        <button class="num-btn" data-n="7"><span class="num-digit">7</span><span class="num-letters">PQRS</span></button>
+        <button class="num-btn" data-n="8"><span class="num-digit">8</span><span class="num-letters">TUV</span></button>
+        <button class="num-btn" data-n="9"><span class="num-digit">9</span><span class="num-letters">WXYZ</span></button>
+        <button class="num-btn empty"></button>
+        <button class="num-btn" data-n="0"><span class="num-digit">0</span><span class="num-letters"></span></button>
+        <button class="num-btn delete" id="delete-btn"><span class="num-digit">⌫</span></button>
+      </div>
+
+      <button class="cancel-btn" id="cancel-btn">Cancel</button>
+    </div>
+  </div>
+
+  <div class="login-footer">Napa, CA · Flookes HQ</div>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <script>
+    // ── Config ──────────────────────────────────────────────
+    const SUPABASE_URL = 'https://nwrvgjfnetuaohxzmsuv.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_TMqE0djUkHy9F1J_ye2Ytg_QebA9bTL';
+    const MAX_ATTEMPTS = 3;
+    const LOCKOUT_MINUTES = 5;
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ── State ────────────────────────────────────────────────
+    let members = [];
+    let selectedMember = null;
+    let pinBuffer = '';
+    let attempts = 0;
+
+    // ── Utility ──────────────────────────────────────────────
+    async function sha256(text) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+
+    function getLockoutKey(id) { return `fhq_lockout_${id}`; }
+    function getAttemptsKey(id) { return `fhq_attempts_${id}`; }
+
+    function isLockedOut(id) {
+      const until = localStorage.getItem(getLockoutKey(id));
+      if (!until) return false;
+      if (Date.now() < parseInt(until)) return true;
+      localStorage.removeItem(getLockoutKey(id));
+      localStorage.removeItem(getAttemptsKey(id));
+      return false;
+    }
+
+    function lockoutRemaining(id) {
+      const until = parseInt(localStorage.getItem(getLockoutKey(id)) || '0');
+      return Math.max(0, Math.ceil((until - Date.now()) / 60000));
+    }
+
+    function recordFailedAttempt(id) {
+      const key = getAttemptsKey(id);
+      const current = parseInt(localStorage.getItem(key) || '0') + 1;
+      localStorage.setItem(key, current);
+      if (current >= MAX_ATTEMPTS) {
+        localStorage.setItem(getLockoutKey(id), Date.now() + LOCKOUT_MINUTES * 60 * 1000);
+      }
+      return current;
+    }
+
+    function clearAttempts(id) {
+      localStorage.removeItem(getAttemptsKey(id));
+      localStorage.removeItem(getLockoutKey(id));
+    }
+
+    // ── Date/time display ────────────────────────────────────
+    function updateDateTime() {
+      const now = new Date();
+      const opts = { weekday: 'long', month: 'long', day: 'numeric' };
+      document.getElementById('datetime').textContent = now.toLocaleDateString('en-US', opts);
+    }
+    updateDateTime();
+    setInterval(updateDateTime, 60000);
+
+    // ── Render profile cards ─────────────────────────────────
+    function renderCards(members) {
+      const grid = document.getElementById('profile-grid');
+      grid.innerHTML = '';
+      members.forEach(m => {
+        const card = document.createElement('div');
+        card.className = 'profile-card';
+        card.style.setProperty('--card-color', m.color_primary);
+        card.innerHTML = `
+          <div class="card-glow"></div>
+          <div class="card-emoji">${m.emoji}</div>
+          <div class="card-name">${m.name}</div>
+          <div class="card-role">${m.role === 'parent' ? 'Parent' : 'Kid'}</div>
+        `;
+        card.addEventListener('click', () => openPinModal(m));
+        grid.appendChild(card);
+      });
+    }
+
+    // ── PIN Modal ────────────────────────────────────────────
+    function openPinModal(member) {
+      selectedMember = member;
+      pinBuffer = '';
+      attempts = parseInt(localStorage.getItem(getAttemptsKey(member.id)) || '0');
+
+      document.getElementById('modal-emoji').textContent = member.emoji;
+      document.getElementById('modal-name').textContent = member.name;
+      document.getElementById('modal-name').style.color = member.color_primary;
+      document.getElementById('modal-error').textContent = '';
+
+      // Apply color theme to modal
+      document.querySelector('.modal-sheet').style.setProperty('--modal-color', member.color_primary);
+
+      // Handle lockout
+      if (isLockedOut(member.id)) {
+        showLockout();
+      } else {
+        updateDots();
+      }
+
+      document.getElementById('pin-modal').classList.add('open');
+    }
+
+    function closePinModal() {
+      document.getElementById('pin-modal').classList.remove('open');
+      pinBuffer = '';
+      selectedMember = null;
+      restoreNumpad();
+    }
+
+    function showLockout() {
+      const mins = lockoutRemaining(selectedMember.id);
+      document.getElementById('numpad').style.display = 'none';
+      document.getElementById('pin-dots').innerHTML = `
+        <div class="lockout-msg">
+          <div class="lock-icon">🔒</div>
+          <p>Too many attempts.<br><strong>Try again in ${mins} minute${mins !== 1 ? 's' : ''}.</strong></p>
+        </div>
+      `;
+    }
+
+    function restoreNumpad() {
+      document.getElementById('numpad').style.display = 'grid';
+      document.getElementById('pin-dots').innerHTML = `
+        <div class="pin-dot" id="dot-0"></div>
+        <div class="pin-dot" id="dot-1"></div>
+        <div class="pin-dot" id="dot-2"></div>
+        <div class="pin-dot" id="dot-3"></div>
+      `;
+    }
+
+    function updateDots() {
+      for (let i = 0; i < 4; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        if (!dot) return;
+        dot.classList.toggle('filled', i < pinBuffer.length);
+        dot.classList.remove('error');
+      }
+    }
+
+    function showError(msg) {
+      const dotsEl = document.getElementById('pin-dots');
+      const error = document.getElementById('modal-error');
+      // Flash dots red
+      for (let i = 0; i < pinBuffer.length; i++) {
+        const dot = document.getElementById(`dot-${i}`);
+        if (dot) dot.classList.add('error');
+      }
+      dotsEl.classList.add('shake');
+      setTimeout(() => {
+        dotsEl.classList.remove('shake');
+        for (let i = 0; i < 4; i++) {
+          const dot = document.getElementById(`dot-${i}`);
+          if (dot) { dot.classList.remove('error'); dot.classList.remove('filled'); }
+        }
+      }, 500);
+      error.textContent = msg;
+      pinBuffer = '';
+    }
+
+    // ── PIN digit input ──────────────────────────────────────
+    async function enterDigit(digit) {
+      if (!selectedMember) return;
+      if (isLockedOut(selectedMember.id)) { showLockout(); return; }
+      if (pinBuffer.length >= 4) return;
+
+      pinBuffer += digit;
+      updateDots();
+
+      if (pinBuffer.length === 4) {
+        await verifyPin();
+      }
+    }
+
+    function deleteDigit() {
+      if (pinBuffer.length > 0) {
+        pinBuffer = pinBuffer.slice(0, -1);
+        updateDots();
+        document.getElementById('modal-error').textContent = '';
+      }
+    }
+
+    async function verifyPin() {
+      const hash = await sha256(pinBuffer);
+
+      try {
+        const { data, error } = await supabase
+          .from('family_members')
+          .select('*')
+          .eq('id', selectedMember.id)
+          .eq('pin_hash', hash)
+          .single();
+
+        if (error || !data) {
+          const att = recordFailedAttempt(selectedMember.id);
+          const remaining = MAX_ATTEMPTS - att;
+          if (remaining <= 0) {
+            showLockout();
+          } else {
+            showError(`Incorrect PIN · ${remaining} attempt${remaining !== 1 ? 's' : ''} left`);
+          }
+          return;
+        }
+
+        // Success!
+        clearAttempts(selectedMember.id);
+        const session = {
+          id: data.id,
+          name: data.name,
+          role: data.role,
+          emoji: data.emoji,
+          color_primary: data.color_primary,
+          color_secondary: data.color_secondary,
+          color_tertiary: data.color_tertiary,
+          loginTime: Date.now()
+        };
+        localStorage.setItem('fhq_session', JSON.stringify(session));
+        window.location.href = 'app.html';
+
+      } catch (e) {
+        showError('Connection error. Try again.');
+      }
+    }
+
+    // ── Numpad event listeners ───────────────────────────────
+    document.querySelectorAll('.num-btn[data-n]').forEach(btn => {
+      btn.addEventListener('click', () => enterDigit(btn.dataset.n));
+    });
+    document.getElementById('delete-btn').addEventListener('click', deleteDigit);
+    document.getElementById('cancel-btn').addEventListener('click', closePinModal);
+    document.getElementById('modal-backdrop').addEventListener('click', closePinModal);
+
+    // ── Load family members & boot ───────────────────────────
+    async function boot() {
+      // Already logged in?
+      const session = localStorage.getItem('fhq_session');
+      if (session) {
+        try {
+          const s = JSON.parse(session);
+          // Session valid for 12 hours
+          if (Date.now() - s.loginTime < 12 * 60 * 60 * 1000) {
+            window.location.href = 'app.html';
+            return;
+          }
+        } catch(e) { localStorage.removeItem('fhq_session'); }
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from('family_members')
+          .select('*')
+          .order('display_order');
+
+        if (error) throw error;
+        members = data;
+        renderCards(members);
+      } catch (e) {
+        console.error('Failed to load family members:', e);
+        // Show fallback message
+        document.getElementById('profile-grid').innerHTML =
+          '<p style="color:var(--text-muted);text-align:center;grid-column:span 2;font-size:0.85rem">Unable to connect.<br>Check your internet connection.</p>';
+      }
+
+      // Fade out loading screen
+      const loading = document.getElementById('loading');
+      loading.classList.add('fade-out');
+      setTimeout(() => {
+        loading.style.display = 'none';
+        document.getElementById('login-screen').classList.add('visible');
+      }, 500);
+    }
+
+    boot();
+  </script>
+</body>
+</html>
