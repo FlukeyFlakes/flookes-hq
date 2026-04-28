@@ -357,16 +357,54 @@
       padding: 8px 0;
     }
 
+    /* Calendar day label header */
+    .cal-day-label {
+      font-size: 0.62rem;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .cal-day-label-today {
+      font-size: 0.6rem;
+      background: rgba(var(--user-rgb), 0.14);
+      color: var(--user-color);
+      border-radius: 100px;
+      padding: 2px 9px;
+      letter-spacing: 0.1em;
+    }
+
+    /* Swiper wrapper — same pattern as weather */
+    .cal-slider {
+      display: flex;
+      overflow: hidden;
+      width: 100%;
+      touch-action: pan-y;
+      cursor: grab;
+    }
+    .cal-slider.dragging { cursor: grabbing; }
+
+    .cal-panel {
+      min-width: 100%;
+      width: 100%;
+      flex-shrink: 0;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     .calendar-empty {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 24px 0;
+      padding: 20px 0 8px;
       gap: 8px;
       color: var(--text-muted);
       font-size: 0.85rem;
+      text-align: center;
     }
-    .calendar-empty-icon { font-size: 2rem; opacity: 0.4; }
+    .calendar-empty-icon { font-size: 1.8rem; opacity: 0.35; }
 
     .calendar-event {
       display: flex;
@@ -432,6 +470,26 @@
       font-size: 0.72rem;
       color: var(--text-muted);
       margin-top: 3px;
+    }
+
+    /* Dots row — shared style reused from weather */
+    .cal-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 14px;
+    }
+    .cal-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.18);
+      transition: background 0.2s ease, transform 0.2s ease;
+      cursor: pointer;
+    }
+    .cal-dot.active {
+      background: var(--user-color);
+      transform: scale(1.35);
     }
 
     /* ── Bottom nav ── */
@@ -1136,7 +1194,7 @@
 
       <!-- Calendar -->
       <div class="section-card" id="calendar-card">
-        <div class="section-label">📅 Today's Calendar</div>
+        <div class="section-label">📅 Calendar</div>
         <div id="calendar-content">
           <div class="calendar-loading">
             <span style="font-size:1.2rem;animation:pulse 2s ease-in-out infinite">📅</span>
@@ -2425,47 +2483,103 @@
       return new Date(dt).toLocaleTimeString('en-US', { hour:'numeric', minute:'2-digit', hour12:true });
     }
 
+    function calDayLabel(dateStr, index) {
+      // dateStr = 'YYYY-MM-DD'
+      const d = new Date(dateStr + 'T12:00:00');
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'long' });
+      const monthDay = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const isToday = index === 0;
+      const todayBadge = isToday
+        ? `<span class="cal-day-label-today">Today</span>` : '';
+      return `<div class="cal-day-label"><span>${dayName} · ${monthDay}</span>${todayBadge}</div>`;
+    }
+
+    function buildEventHTML(evt) {
+      const allDay   = !evt.start.dateTime;
+      const startStr = allDay ? '' : formatTime(evt.start.dateTime);
+      const endStr   = allDay ? '' : formatTime(evt.end?.dateTime);
+      const loc      = evt.location ? `<div class="event-location">📍 ${evt.location}</div>` : '';
+      return `
+        <div class="calendar-event">
+          <div class="event-time-col">
+            ${allDay
+              ? '<span style="font-size:0.65rem;color:var(--text-muted)">All<br>Day</span>'
+              : `<span class="event-start">${startStr}</span><span class="event-end">${endStr}</span>`}
+          </div>
+          <div class="event-bar"></div>
+          <div class="event-details">
+            ${allDay ? '<span class="event-allday">All Day</span>' : ''}
+            <div class="event-title">${evt.summary || 'Untitled'}</div>
+            ${loc}
+          </div>
+        </div>`;
+    }
+
+    function filterEventsForUser(events) {
+      if (session.role === 'parent') return events;
+      // Kids see only events that contain their name in the title (case-insensitive)
+      const name = session.name.toLowerCase();
+      return events.filter(evt => (evt.summary || '').toLowerCase().includes(name));
+    }
+
     async function loadCalendar() {
       const container = document.getElementById('calendar-content');
+      const dayCount  = session.role === 'kid' ? 3 : 7;
+
       try {
-        const res  = await fetch(WORKER_URL);
+        const res  = await fetch(`${WORKER_URL}?days=${dayCount}`);
         const data = await res.json();
 
-        if (!data.items || data.items.length === 0) {
-          container.innerHTML = `
-            <div class="calendar-empty">
-              <div class="calendar-empty-icon">📭</div>
-              <div>No events today — enjoy the free day!</div>
-            </div>`;
-          return;
+        if (!data.items) throw new Error('No items in response');
+
+        // Build an array of YYYY-MM-DD strings for each day in the window
+        const today = new Date();
+        const days  = [];
+        for (let i = 0; i < dayCount; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + i);
+          days.push(d.toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' }));
         }
 
-        const events = data.items.sort((a,b) => {
-          const at = a.start.dateTime || a.start.date || '';
-          const bt = b.start.dateTime || b.start.date || '';
-          return at.localeCompare(bt);
+        // Filter events for the logged-in user
+        const visible = filterEventsForUser(data.items);
+
+        // Group by date
+        const byDate = {};
+        days.forEach(d => { byDate[d] = []; });
+        visible.forEach(evt => {
+          const dateKey = evt._pacificDate || evt.start.date || evt.start.dateTime?.slice(0,10) || '';
+          if (byDate[dateKey] !== undefined) byDate[dateKey].push(evt);
         });
 
-        container.innerHTML = events.map(evt => {
-          const allDay = !evt.start.dateTime;
-          const startStr = allDay ? '' : formatTime(evt.start.dateTime);
-          const endStr   = allDay ? '' : formatTime(evt.end.dateTime);
-          const loc = evt.location ? `<div class="event-location">📍 ${evt.location}</div>` : '';
-          return `
-            <div class="calendar-event">
-              <div class="event-time-col">
-                ${allDay
-                  ? '<span style="font-size:0.65rem;color:var(--text-muted)">All<br>Day</span>'
-                  : `<span class="event-start">${startStr}</span><span class="event-end">${endStr}</span>`}
-              </div>
-              <div class="event-bar"></div>
-              <div class="event-details">
-                ${allDay ? '<span class="event-allday">All Day</span>' : ''}
-                <div class="event-title">${evt.summary || 'Untitled'}</div>
-                ${loc}
-              </div>
+        // Build panels
+        let panelsHTML = '';
+        days.forEach((dateStr, i) => {
+          const dayEvents = byDate[dateStr];
+          const eventsHTML = dayEvents.length > 0
+            ? dayEvents.map(buildEventHTML).join('')
+            : `<div class="calendar-empty">
+                 <div class="calendar-empty-icon">📭</div>
+                 <div>Nothing scheduled</div>
+               </div>`;
+
+          panelsHTML += `
+            <div class="cal-panel">
+              ${calDayLabel(dateStr, i)}
+              ${eventsHTML}
             </div>`;
-        }).join('');
+        });
+
+        // Build dots
+        const dotsHTML = days.map((_, i) =>
+          `<div class="cal-dot${i === 0 ? ' active' : ''}" data-i="${i}"></div>`
+        ).join('');
+
+        container.innerHTML = `
+          <div class="cal-slider" id="cal-slider">${panelsHTML}</div>
+          <div class="cal-dots" id="cal-dots">${dotsHTML}</div>`;
+
+        initCalSwipe(dayCount);
 
       } catch(e) {
         container.innerHTML = `
@@ -2474,6 +2588,50 @@
             <div>Couldn't load calendar.</div>
           </div>`;
       }
+    }
+
+    function initCalSwipe(panelCount) {
+      const slider = document.getElementById('cal-slider');
+      const dots   = document.querySelectorAll('.cal-dot');
+      if (!slider) return;
+
+      const panels = slider.querySelectorAll('.cal-panel');
+      let cur = 0, startX = 0, isDragging = false, dragDelta = 0;
+
+      function goTo(i) {
+        cur = Math.max(0, Math.min(panelCount - 1, i));
+        const offset = -cur * 100;
+        panels.forEach(p => p.style.transform = `translateX(${offset}%)`);
+        dots.forEach((d, j) => d.classList.toggle('active', j === cur));
+      }
+
+      dots.forEach(d => d.addEventListener('click', () => goTo(parseInt(d.dataset.i))));
+
+      slider.addEventListener('touchstart', e => {
+        startX = e.touches[0].clientX; isDragging = true;
+      }, { passive: true });
+      slider.addEventListener('touchmove', e => {
+        if (isDragging) dragDelta = e.touches[0].clientX - startX;
+      }, { passive: true });
+      slider.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (dragDelta < -50) goTo(cur + 1);
+        else if (dragDelta > 50) goTo(cur - 1);
+        dragDelta = 0;
+      });
+
+      slider.addEventListener('mousedown', e => {
+        startX = e.clientX; isDragging = true; slider.classList.add('dragging');
+      });
+      window.addEventListener('mousemove', e => { if (isDragging) dragDelta = e.clientX - startX; });
+      window.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false; slider.classList.remove('dragging');
+        if (dragDelta < -50) goTo(cur + 1);
+        else if (dragDelta > 50) goTo(cur - 1);
+        dragDelta = 0;
+      });
     }
 
     // ════════════════════════════════════════════════
