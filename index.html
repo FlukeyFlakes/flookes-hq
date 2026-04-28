@@ -510,7 +510,7 @@
     const MAX_ATTEMPTS = 3;
     const LOCKOUT_MINUTES = 5;
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     // ── State ────────────────────────────────────────────────
     let members = [];
@@ -691,7 +691,7 @@
       const hash = await sha256(pinBuffer);
 
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from('family_members')
           .select('*')
           .eq('id', selectedMember.id)
@@ -753,7 +753,7 @@
       }
 
       try {
-        const { data, error } = await supabase
+        const { data, error } = await db
           .from('family_members')
           .select('*')
           .order('display_order');
