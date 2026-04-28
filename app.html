@@ -350,6 +350,93 @@
       max-width: 260px;
     }
 
+    /* ── Calendar ── */
+    .calendar-loading {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      padding: 8px 0;
+    }
+
+    .calendar-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px 0;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .calendar-empty-icon { font-size: 2rem; opacity: 0.4; }
+
+    .calendar-event {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .calendar-event:last-child { border-bottom: none; padding-bottom: 0; }
+
+    .event-time-col {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      min-width: 52px;
+      padding-top: 2px;
+    }
+
+    .event-start {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--user-color);
+    }
+
+    .event-end {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      margin-top: 1px;
+    }
+
+    .event-bar {
+      width: 3px;
+      border-radius: 2px;
+      background: var(--user-color);
+      align-self: stretch;
+      min-height: 36px;
+      opacity: 0.7;
+      flex-shrink: 0;
+    }
+
+    .event-details { flex: 1; }
+
+    .event-title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: var(--text);
+      line-height: 1.3;
+    }
+
+    .event-allday {
+      display: inline-block;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--user-color);
+      background: rgba(var(--user-rgb), 0.12);
+      border-radius: 4px;
+      padding: 2px 6px;
+      margin-bottom: 3px;
+    }
+
+    .event-location {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
     /* ── Bottom nav ── */
     .bottom-nav {
       position: fixed;
@@ -460,13 +547,14 @@
       </div>
     </div>
 
-    <!-- Calendar (coming soon) -->
-    <div class="section-card">
+    <!-- Calendar -->
+    <div class="section-card" id="calendar-card">
       <div class="section-label">📅 Today's Calendar</div>
-      <div class="placeholder-content">
-        <div class="placeholder-icon">📅</div>
-        <div class="placeholder-title">Calendar Coming Soon</div>
-        <div class="placeholder-text">Your Google Calendar events will appear here, deduplicated and color-coded.</div>
+      <div id="calendar-content">
+        <div class="calendar-loading">
+          <span style="font-size:1.2rem;animation:pulse 2s ease-in-out infinite">📅</span>
+          <span>Loading events...</span>
+        </div>
       </div>
     </div>
 
@@ -783,6 +871,75 @@
       });
     }
 
+    // ── Calendar ──────────────────────────────────────────────
+    const WORKER_URL = 'https://flookes-calendar.flookes.workers.dev';
+    const JONATHAN_CAL_ID = 'flookes@gmail.com';
+
+    function formatTime(dateTimeStr) {
+      if (!dateTimeStr) return '';
+      const d = new Date(dateTimeStr);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    }
+
+    function isAllDay(event) {
+      return !event.start.dateTime;
+    }
+
+    async function loadCalendar() {
+      const container = document.getElementById('calendar-content');
+      try {
+        const res = await fetch(`${WORKER_URL}?calendarId=${encodeURIComponent(JONATHAN_CAL_ID)}`);
+        const data = await res.json();
+
+        if (!data.items || data.items.length === 0) {
+          container.innerHTML = `
+            <div class="calendar-empty">
+              <div class="calendar-empty-icon">📭</div>
+              <div>No events today — enjoy the free day!</div>
+            </div>`;
+          return;
+        }
+
+        // Sort: all-day first, then by start time
+        const events = data.items.sort((a, b) => {
+          const aTime = a.start.dateTime || a.start.date || '';
+          const bTime = b.start.dateTime || b.start.date || '';
+          return aTime.localeCompare(bTime);
+        });
+
+        container.innerHTML = events.map(evt => {
+          const allDay = isAllDay(evt);
+          const startStr = allDay ? '' : formatTime(evt.start.dateTime);
+          const endStr = allDay ? '' : formatTime(evt.end.dateTime);
+          const location = evt.location
+            ? `<div class="event-location">📍 ${evt.location}</div>` : '';
+
+          return `
+            <div class="calendar-event">
+              <div class="event-time-col">
+                ${allDay
+                  ? '<span style="font-size:0.65rem;color:var(--text-muted)">All<br>Day</span>'
+                  : `<span class="event-start">${startStr}</span>
+                     <span class="event-end">${endStr}</span>`}
+              </div>
+              <div class="event-bar"></div>
+              <div class="event-details">
+                ${allDay ? '<span class="event-allday">All Day</span>' : ''}
+                <div class="event-title">${evt.summary || 'Untitled'}</div>
+                ${location}
+              </div>
+            </div>`;
+        }).join('');
+
+      } catch(e) {
+        container.innerHTML = `
+          <div class="calendar-empty">
+            <div class="calendar-empty-icon">⚠️</div>
+            <div>Couldn't load calendar. Check your connection.</div>
+          </div>`;
+      }
+    }
+
     // ── Navigation (placeholder) ─────────────────────────────
     function navigate(tab) {
       document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -793,6 +950,7 @@
     // ── Boot ─────────────────────────────────────────────────
     loadSession();
     loadWeather();
+    loadCalendar();
   </script>
 </body>
 </html>
