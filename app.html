@@ -3731,7 +3731,7 @@
       let existingIngs = [];
       if (mealId) {
         const { data: meal } = await db.from('meals').select('dinner_name').eq('id', mealId).single();
-        mealName = meal?.name || '';
+        mealName = meal?.dinner_name || '';
         const { data: ings } = await db.from('ingredients').select('*').eq('meal_id', mealId);
         existingIngs = ings || [];
       }
