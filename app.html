@@ -1423,6 +1423,290 @@
       cursor: pointer;
     }
     .home-bank-link:active { opacity: 0.7; }
+
+    /* ══════════════════════════════════════════════
+       MEAL PLANNER
+    ══════════════════════════════════════════════ */
+
+    /* Week nav row */
+    .meal-week-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 12px;
+    }
+    .meal-week-label {
+      font-size: 0.75rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      text-align: center;
+      flex: 1;
+    }
+    .meal-nav-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 1.1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.15s ease, color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      line-height: 1;
+    }
+    .meal-nav-btn:active { background: rgba(255,255,255,0.1); color: var(--user-color); }
+
+    /* Day rows */
+    .meal-day-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 10px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .meal-day-row.meal-today {
+      background: rgba(var(--user-rgb), 0.07);
+      border-color: rgba(var(--user-rgb), 0.25);
+    }
+    .meal-day-row.meal-interactive { cursor: pointer; }
+    .meal-day-row.meal-interactive:active { background: rgba(255,255,255,0.07); }
+
+    /* Left: day label */
+    .meal-day-label {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      min-width: 38px;
+      flex-shrink: 0;
+    }
+    .meal-day-abbr {
+      font-size: 0.6rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-weight: 600;
+      line-height: 1;
+    }
+    .meal-day-row.meal-today .meal-day-abbr { color: var(--user-color); }
+    .meal-day-num {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.5rem;
+      font-weight: 600;
+      line-height: 1.1;
+      color: var(--text-muted);
+    }
+    .meal-day-row.meal-today .meal-day-num { color: var(--user-color); }
+
+    /* Divider line */
+    .meal-day-divider {
+      width: 1px;
+      align-self: stretch;
+      background: var(--border);
+      flex-shrink: 0;
+    }
+    .meal-day-row.meal-today .meal-day-divider { background: rgba(var(--user-rgb), 0.3); }
+
+    /* Right: meal content */
+    .meal-day-content {
+      flex: 1;
+      min-width: 0;
+    }
+    .meal-day-meal-name {
+      font-size: 0.95rem;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.3;
+    }
+    .meal-day-empty-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      font-style: italic;
+    }
+    .meal-day-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Edit chevron for parents */
+    .meal-day-chevron {
+      font-size: 1rem;
+      color: var(--text-muted);
+      opacity: 0.35;
+      flex-shrink: 0;
+    }
+
+    /* Home dinner card */
+    .home-dinner-planned {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 0 2px;
+    }
+    .home-dinner-name {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: 1.35rem;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+      flex: 1;
+    }
+    .home-dinner-link {
+      font-size: 0.75rem;
+      color: var(--user-color);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-left: 10px;
+    }
+    .home-dinner-empty {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 0 2px;
+    }
+    .home-dinner-empty-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+    }
+    .home-dinner-nudge-btn {
+      font-size: 0.75rem;
+      color: var(--user-color);
+      background: rgba(var(--user-rgb), 0.1);
+      border: 1px solid rgba(var(--user-rgb), 0.25);
+      border-radius: 100px;
+      padding: 5px 13px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      flex-shrink: 0;
+    }
+    .home-dinner-nudge-btn:active { opacity: 0.7; }
+
+    /* Meal sheet ingredient list */
+    .meal-ing-list { margin-bottom: 10px; }
+    .meal-ing-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-bottom: 8px;
+    }
+    .meal-ing-inputs {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .meal-ing-row-top {
+      display: flex;
+      gap: 8px;
+    }
+    .meal-ing-name-input {
+      flex: 1;
+    }
+    .meal-ing-qty-input {
+      width: 80px;
+      flex-shrink: 0;
+    }
+    .meal-ing-store-pills {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+    .meal-store-pill {
+      padding: 4px 10px;
+      border-radius: 100px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+    .meal-store-pill.active {
+      background: rgba(var(--user-rgb), 0.15);
+      border-color: rgba(var(--user-rgb), 0.5);
+      color: var(--user-color);
+    }
+    .meal-ing-remove {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      opacity: 0.5;
+      cursor: pointer;
+      padding: 2px 4px;
+      flex-shrink: 0;
+      margin-top: 2px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .meal-ing-remove:active { opacity: 1; color: #EF4444; }
+
+    .meal-add-ing-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 11px;
+      background: rgba(255,255,255,0.03);
+      border: 1px dashed rgba(255,255,255,0.12);
+      border-radius: 12px;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin-bottom: 16px;
+      transition: background 0.15s ease, border-color 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .meal-add-ing-btn:active { background: rgba(255,255,255,0.06); border-color: rgba(var(--user-rgb),0.3); }
+
+    .meal-delete-link {
+      display: block;
+      text-align: center;
+      font-size: 0.78rem;
+      color: #EF4444;
+      opacity: 0.6;
+      cursor: pointer;
+      padding: 12px 0 4px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .meal-delete-link:active { opacity: 1; }
+
+    /* Small sheet input variant */
+    .sheet-input-sm {
+      width: 100%;
+      background: rgba(255,255,255,0.05);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 9px 12px;
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.18s ease;
+      -webkit-appearance: none;
+      appearance: none;
+    }
+    .sheet-input-sm:focus { border-color: rgba(var(--user-rgb), 0.5); }
+    .sheet-input-sm::placeholder { color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -1513,12 +1797,13 @@
       </div>
 
       <!-- Dinner -->
-      <div class="section-card">
+      <div class="section-card" id="home-dinner-card" style="cursor:pointer" onclick="handleDinnerCardTap()">
         <div class="section-label">🍽 Tonight's Dinner</div>
-        <div class="placeholder-content">
-          <div class="placeholder-icon">🍽️</div>
-          <div class="placeholder-title">Meal Plan Coming Soon</div>
-          <div class="placeholder-text">Tonight's dinner from your weekly meal plan will show here.</div>
+        <div id="home-dinner-content">
+          <div class="calendar-loading">
+            <span style="font-size:1.1rem;animation:pulse 2s ease-in-out infinite">🍽️</span>
+            <span>Loading dinner...</span>
+          </div>
         </div>
       </div>
 
@@ -1549,10 +1834,20 @@
     <!-- ══════════════ MEALS SECTION ══════════════ -->
     <div id="section-meals" class="page-section" style="display:none">
       <div class="page-header"><div class="page-header-title">Meal Planner</div></div>
-      <div class="placeholder-content" style="padding-top:40px">
-        <div class="placeholder-icon">🍽️</div>
-        <div class="placeholder-title">Coming Soon</div>
-        <div class="placeholder-text">Weekly dinner planning, ingredient lists, and tonight's menu.</div>
+
+      <!-- Week navigation -->
+      <div class="meal-week-nav">
+        <div class="meal-nav-btn" onclick="shiftMealWeek(-1)">‹</div>
+        <div class="meal-week-label" id="meal-week-label">Loading…</div>
+        <div class="meal-nav-btn" onclick="shiftMealWeek(1)">›</div>
+      </div>
+
+      <!-- Day rows injected by JS -->
+      <div id="meals-panel-content">
+        <div class="tasks-loading">
+          <span style="animation:pulse 2s ease-in-out infinite">🍽️</span>
+          <span>Loading meals...</span>
+        </div>
       </div>
     </div>
 
@@ -1664,6 +1959,13 @@
     let bankSheetMode = null;    // 'payout' | 'goal'
     let bankSheetKidId = null;   // kid targeted by open sheet
 
+    // Meal state
+    let mealWeekOffset    = 0;       // 0 = current week, +1/-1 = next/prev
+    let mealsRealtime     = null;    // supabase channel
+    let mealSheetDayOfWeek = null;   // 0–6 (Sun–Sat)
+    let mealSheetMealId   = null;    // null = creating, uuid = editing
+    let mealIngRowCount   = 0;       // counter for unique ingredient row IDs
+
     // ════════════════════════════════════════════════
     //  SESSION
     // ════════════════════════════════════════════════
@@ -1760,7 +2062,11 @@
       document.querySelectorAll('.page-section').forEach(s => s.style.display = 'none');
       document.getElementById(`section-${tab}`).style.display = 'block';
 
-      // FAB — tasks and bank
+      // Always clean up subscriptions before setting up new ones
+      unsubscribeFromTasks();
+      unsubscribeFromMeals();
+
+      // FAB + panel hooks
       const fab = document.getElementById('fab');
       if (tab === 'tasks') {
         fab.classList.add('visible');
@@ -1768,17 +2074,20 @@
         subscribeToTasks();
       } else if (tab === 'bank') {
         fab.classList.add('visible');
-        unsubscribeFromTasks();
         loadBank();
+      } else if (tab === 'meals') {
+        fab.classList.remove('visible');
+        loadMeals();
+        subscribeToMeals();
       } else {
         fab.classList.remove('visible');
-        unsubscribeFromTasks();
       }
 
-      // Refresh home preview when returning home
+      // Refresh home previews when returning home
       if (tab === 'home') {
         updateHomeTasksPreview();
         updateHomeBankPreview();
+        updateHomeDinnerPreview();
       }
     }
 
@@ -3289,6 +3598,377 @@
     }
 
     // ════════════════════════════════════════════════
+    //  MEAL PLANNER
+    // ════════════════════════════════════════════════
+
+    // Returns YYYY-MM-DD of the Sunday that anchors the week at mealWeekOffset
+    function getMealWeekStartDate(offset) {
+      const today = new Date();
+      const day   = today.getDay(); // 0 = Sunday
+      const sun   = new Date(today);
+      sun.setDate(today.getDate() - day + (offset * 7));
+      return sun.toLocaleDateString('en-CA'); // YYYY-MM-DD
+    }
+
+    // Shift week forward or back and reload
+    function shiftMealWeek(dir) {
+      mealWeekOffset += dir;
+      loadMeals();
+    }
+
+    // Format a YYYY-MM-DD as "Apr 27"
+    function fmtShortDate(dateStr) {
+      return new Date(dateStr + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
+    // Given week start (Sunday) and dayOfWeek index (0–6), return the YYYY-MM-DD for that day
+    function dayDateFromWeekStart(weekStartStr, dow) {
+      const d = new Date(weekStartStr + 'T12:00:00');
+      d.setDate(d.getDate() + dow);
+      return d.toLocaleDateString('en-CA');
+    }
+
+    async function loadMeals() {
+      // Update week label
+      const weekStart = getMealWeekStartDate(mealWeekOffset);
+      const weekEnd   = dayDateFromWeekStart(weekStart, 6);
+      document.getElementById('meal-week-label').textContent =
+        `${fmtShortDate(weekStart)} – ${fmtShortDate(weekEnd)}`;
+
+      document.getElementById('meals-panel-content').innerHTML =
+        `<div class="tasks-loading"><span style="animation:pulse 2s ease-in-out infinite">🍽️</span><span>Loading...</span></div>`;
+
+      // Fetch meals for this week
+      const { data: meals } = await db.from('meals')
+        .select('*')
+        .eq('week_start_date', weekStart)
+        .order('day_of_week');
+
+      const mealIds = (meals || []).map(m => m.id);
+
+      // Fetch all ingredients for these meals in one query
+      let ingredientsByMeal = {};
+      if (mealIds.length > 0) {
+        const { data: ings } = await db.from('ingredients')
+          .select('*')
+          .in('meal_id', mealIds);
+        (ings || []).forEach(ing => {
+          if (!ingredientsByMeal[ing.meal_id]) ingredientsByMeal[ing.meal_id] = [];
+          ingredientsByMeal[ing.meal_id].push(ing);
+        });
+      }
+
+      renderMealsPanel(weekStart, meals || [], ingredientsByMeal);
+    }
+
+    function renderMealsPanel(weekStart, meals, ingredientsByMeal) {
+      const DAY_ABBR  = ['SUN','MON','TUE','WED','THU','FRI','SAT'];
+      const DAY_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const isParent  = session.role === 'parent';
+      const todayStr  = new Date().toLocaleDateString('en-CA');
+
+      // Index meals by day_of_week for fast lookup
+      const mealByDow = {};
+      meals.forEach(m => { mealByDow[m.day_of_week] = m; });
+
+      let html = '';
+      for (let dow = 0; dow <= 6; dow++) {
+        const dayDate  = dayDateFromWeekStart(weekStart, dow);
+        const isToday  = dayDate === todayStr;
+        const meal     = mealByDow[dow] || null;
+        const ings     = meal ? (ingredientsByMeal[meal.id] || []) : [];
+        const ingCount = ings.length;
+
+        const todayClass    = isToday ? ' meal-today' : '';
+        const interactClass = isParent ? ' meal-interactive' : '';
+        const onClickAttr   = isParent
+          ? `onclick="openMealSheet(${dow}, ${meal ? `'${meal.id}'` : 'null'})"` : '';
+
+        const dayNumStr = new Date(dayDate + 'T12:00:00').getDate();
+
+        let contentHtml = '';
+        if (meal) {
+          contentHtml = `
+            <div class="meal-day-meal-name">${escHtml(meal.name)}</div>
+            ${ingCount > 0
+              ? `<div class="meal-day-meta">🛒 ${ingCount} ingredient${ingCount !== 1 ? 's' : ''}</div>`
+              : `<div class="meal-day-meta" style="font-style:italic">No ingredients yet</div>`}`;
+        } else {
+          if (isParent) {
+            contentHtml = `<div class="meal-day-empty-text">Add dinner…</div>`;
+          } else {
+            contentHtml = `<div class="meal-day-empty-text">Not planned yet</div>`;
+          }
+        }
+
+        html += `
+          <div class="meal-day-row${todayClass}${interactClass}" ${onClickAttr}>
+            <div class="meal-day-label">
+              <div class="meal-day-abbr">${isToday ? '·' + DAY_ABBR[dow] + '·' : DAY_ABBR[dow]}</div>
+              <div class="meal-day-num">${dayNumStr}</div>
+            </div>
+            <div class="meal-day-divider"></div>
+            <div class="meal-day-content">${contentHtml}</div>
+            ${isParent ? `<div class="meal-day-chevron">›</div>` : ''}
+          </div>`;
+      }
+
+      document.getElementById('meals-panel-content').innerHTML = html;
+    }
+
+    // ── Meal Sheet ──
+    async function openMealSheet(dow, mealId) {
+      if (session.role !== 'parent') return;
+
+      mealSheetDayOfWeek = dow;
+      mealSheetMealId    = mealId;
+      mealIngRowCount    = 0;
+
+      const DAY_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+      // Fetch existing meal name + ingredients if editing
+      let mealName = '';
+      let existingIngs = [];
+      if (mealId) {
+        const { data: meal } = await db.from('meals').select('name').eq('id', mealId).single();
+        mealName = meal?.name || '';
+        const { data: ings } = await db.from('ingredients').select('*').eq('meal_id', mealId);
+        existingIngs = ings || [];
+      }
+
+      const deleteLink = mealId
+        ? `<div class="meal-delete-link" onclick="deleteMeal('${mealId}')">Remove this meal</div>` : '';
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">${DAY_FULL[dow]}</div>
+        <div class="sheet-field">
+          <label class="sheet-label">Dinner</label>
+          <input type="text" class="sheet-input" id="sheet-meal-name"
+                 placeholder="e.g. Lemon Chicken" maxlength="80" value="${escHtml(mealName)}">
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Ingredients <span style="opacity:0.45">(optional)</span></label>
+          <div class="meal-ing-list" id="meal-ing-list"></div>
+          <div class="meal-add-ing-btn" onclick="addIngredientRow()">+ Add ingredient</div>
+        </div>
+        <button class="sheet-save-btn" onclick="saveMeal()">Save Dinner</button>
+        ${deleteLink}
+      `;
+
+      // Populate existing ingredients
+      existingIngs.forEach(ing => addIngredientRow(ing));
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById('sheet-meal-name')?.focus(), 420);
+    }
+
+    function addIngredientRow(existing) {
+      const idx   = mealIngRowCount++;
+      const name  = existing?.name  || '';
+      const qty   = existing?.quantity || '';
+      const store = existing?.store_tag || 'other';
+
+      const storeOptions = [
+        { key: 'tj',     label: "TJ's"    },
+        { key: 'costco', label: 'Costco'  },
+        { key: 'wf',     label: 'WF'      },
+        { key: 'other',  label: 'Other'   }
+      ];
+
+      const storePills = storeOptions.map(s =>
+        `<div class="meal-store-pill${s.key === store ? ' active' : ''}"
+              data-store="${s.key}"
+              onclick="selectStorePill(this, ${idx})">${s.label}</div>`
+      ).join('');
+
+      const row = document.createElement('div');
+      row.className = 'meal-ing-row';
+      row.dataset.idx = idx;
+      row.innerHTML = `
+        <div class="meal-ing-inputs">
+          <div class="meal-ing-row-top">
+            <input type="text" class="sheet-input-sm meal-ing-name-input"
+                   placeholder="Ingredient" maxlength="60" value="${escHtml(name)}">
+            <input type="text" class="sheet-input-sm meal-ing-qty-input"
+                   placeholder="Qty" maxlength="20" value="${escHtml(qty)}">
+          </div>
+          <div class="meal-ing-store-pills" id="store-pills-${idx}">${storePills}</div>
+        </div>
+        <div class="meal-ing-remove" onclick="removeIngredientRow(this)">✕</div>
+      `;
+
+      document.getElementById('meal-ing-list').appendChild(row);
+    }
+
+    function selectStorePill(el, idx) {
+      const container = document.getElementById(`store-pills-${idx}`);
+      container.querySelectorAll('.meal-store-pill').forEach(p => p.classList.remove('active'));
+      el.classList.add('active');
+    }
+
+    function removeIngredientRow(el) {
+      el.closest('.meal-ing-row').remove();
+    }
+
+    async function saveMeal() {
+      const mealName = (document.getElementById('sheet-meal-name')?.value || '').trim();
+      if (!mealName) {
+        showToast('Add a meal name.');
+        document.getElementById('sheet-meal-name')?.focus();
+        return;
+      }
+
+      const btn = document.querySelector('.sheet-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const weekStart = getMealWeekStartDate(mealWeekOffset);
+      let mealId = mealSheetMealId;
+
+      try {
+        if (mealId) {
+          // Update existing meal name
+          await db.from('meals').update({
+            name:       mealName,
+            updated_at: new Date().toISOString()
+          }).eq('id', mealId);
+        } else {
+          // Insert new meal
+          const { data, error } = await db.from('meals').insert({
+            week_start_date: weekStart,
+            day_of_week:     mealSheetDayOfWeek,
+            name:            mealName,
+            created_by:      session.id
+          }).select().single();
+
+          if (error) throw error;
+          mealId = data.id;
+        }
+
+        // Delete all existing ingredients and re-insert fresh
+        await db.from('ingredients').delete().eq('meal_id', mealId);
+
+        const rows = document.querySelectorAll('#meal-ing-list .meal-ing-row');
+        const toInsert = [];
+        rows.forEach(row => {
+          const name  = (row.querySelector('.meal-ing-name-input')?.value || '').trim();
+          const qty   = (row.querySelector('.meal-ing-qty-input')?.value  || '').trim();
+          const store = row.querySelector('.meal-store-pill.active')?.dataset?.store || 'other';
+          if (name) toInsert.push({ meal_id: mealId, name, quantity: qty || null, store_tag: store });
+        });
+
+        if (toInsert.length > 0) {
+          await db.from('ingredients').insert(toInsert);
+        }
+
+        closeAddSheet();
+        showToast('Dinner saved ✓');
+        await loadMeals();
+        await updateHomeDinnerPreview();
+
+      } catch(e) {
+        showToast('Error saving — try again.');
+        btn.disabled = false;
+        btn.textContent = 'Save Dinner';
+      }
+    }
+
+    async function deleteMeal(mealId) {
+      const ok = confirm('Remove this dinner from the plan?');
+      if (!ok) return;
+
+      await db.from('ingredients').delete().eq('meal_id', mealId);
+      await db.from('meals').delete().eq('id', mealId);
+
+      closeAddSheet();
+      showToast('Meal removed.');
+      await loadMeals();
+      await updateHomeDinnerPreview();
+    }
+
+    // ── Real-time ──
+    function subscribeToMeals() {
+      if (mealsRealtime) return;
+      mealsRealtime = db.channel('meals-realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'meals' }, () => {
+          if (currentTab === 'meals') loadMeals();
+          updateHomeDinnerPreview();
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'ingredients' }, () => {
+          if (currentTab === 'meals') loadMeals();
+        })
+        .subscribe();
+    }
+
+    function unsubscribeFromMeals() {
+      if (mealsRealtime) {
+        db.removeChannel(mealsRealtime);
+        mealsRealtime = null;
+      }
+    }
+
+    // ── Home dinner preview ──
+    async function updateHomeDinnerPreview() {
+      const el = document.getElementById('home-dinner-content');
+      if (!el) return;
+
+      const todayStr = new Date().toLocaleDateString('en-CA');
+      const todayDow = new Date().getDay(); // 0 = Sunday
+      const weekStart = getMealWeekStartDate(0);
+
+      try {
+        const { data: meals } = await db.from('meals')
+          .select('id, name')
+          .eq('week_start_date', weekStart)
+          .eq('day_of_week', todayDow);
+
+        const meal = meals && meals.length > 0 ? meals[0] : null;
+
+        if (meal) {
+          el.innerHTML = `
+            <div class="home-dinner-planned">
+              <div class="home-dinner-name">${escHtml(meal.name)}</div>
+              <div class="home-dinner-link" onclick="navigate('meals', document.querySelector('[data-tab=meals]'))">See week →</div>
+            </div>`;
+        } else {
+          if (session.role === 'parent') {
+            el.innerHTML = `
+              <div class="home-dinner-empty">
+                <div class="home-dinner-empty-text">No dinner planned yet</div>
+                <div class="home-dinner-link" onclick="navigate('meals', document.querySelector('[data-tab=meals]'))">Plan it →</div>
+              </div>`;
+          } else {
+            el.innerHTML = `
+              <div class="home-dinner-empty">
+                <div class="home-dinner-empty-text">Nothing planned yet 🤷</div>
+                <div class="home-dinner-nudge-btn" onclick="event.stopPropagation(); nudgeDinnerPlanning()">Nudge Mom & Dad 👀</div>
+              </div>`;
+          }
+        }
+      } catch(e) {
+        el.innerHTML = `<div class="home-dinner-empty"><div class="home-dinner-empty-text">Couldn't load dinner</div></div>`;
+      }
+    }
+
+    function handleDinnerCardTap() {
+      navigate('meals', document.querySelector('[data-tab=meals]'));
+    }
+
+    function nudgeDinnerPlanning() {
+      const key = 'fhq_dinner_nudge';
+      const last = parseInt(localStorage.getItem(key) || '0');
+      const cooldown = 60 * 60 * 1000; // 1 hour
+      if (Date.now() - last < cooldown) {
+        showToast('You already nudged them recently! 😄');
+        return;
+      }
+      localStorage.setItem(key, Date.now());
+      showToast('Nudge sent to Mom & Dad 👀');
+      // TODO: fire real push notification when notifications phase is built
+    }
+
+    // ════════════════════════════════════════════════
     //  BOOT
     // ════════════════════════════════════════════════
     async function boot() {
@@ -3299,6 +3979,7 @@
       loadCalendar();
       updateHomeTasksPreview();
       updateHomeBankPreview();
+      updateHomeDinnerPreview();
     }
 
     boot();
