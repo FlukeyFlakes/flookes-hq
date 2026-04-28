@@ -3868,7 +3868,8 @@
         await updateHomeDinnerPreview();
 
       } catch(e) {
-        showToast('Error saving — try again.');
+        console.error('saveMeal error:', e);
+        showToast('Error: ' + (e?.message || e?.details || JSON.stringify(e)));
         btn.disabled = false;
         btn.textContent = 'Save Dinner';
       }
