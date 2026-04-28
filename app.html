@@ -1690,7 +1690,69 @@
     }
     .meal-delete-link:active { opacity: 1; }
 
-    /* Small sheet input variant */
+    /* Meal name autocomplete */
+    .meal-name-wrap { position: relative; }
+    .meal-autocomplete-list {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: #1A1A1F;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      z-index: 200;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+    .meal-autocomplete-item {
+      padding: 11px 14px;
+      font-size: 0.9rem;
+      color: var(--text);
+      cursor: pointer;
+      border-bottom: 1px solid var(--border);
+      transition: background 0.1s ease;
+    }
+    .meal-autocomplete-item:last-child { border-bottom: none; }
+    .meal-autocomplete-item:active { background: rgba(var(--user-rgb), 0.12); }
+
+    /* Save as template toggle */
+    .meal-template-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0 4px;
+      cursor: pointer;
+    }
+    .meal-template-toggle-label {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+    }
+    .meal-template-toggle input[type=checkbox] { display: none; }
+    .meal-toggle-track {
+      width: 36px; height: 20px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.1);
+      border: 1px solid var(--border);
+      position: relative;
+      transition: background 0.2s ease;
+      flex-shrink: 0;
+    }
+    .meal-toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 2px; left: 2px;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      transition: transform 0.2s ease, background 0.2s ease;
+    }
+    .meal-template-toggle input:checked + .meal-toggle-track {
+      background: rgba(var(--user-rgb), 0.3);
+      border-color: rgba(var(--user-rgb), 0.5);
+    }
+    .meal-template-toggle input:checked + .meal-toggle-track::after {
+      transform: translateX(16px);
+      background: var(--user-color);
+    }
     .sheet-input-sm {
       width: 100%;
       background: rgba(255,255,255,0.05);
@@ -3743,15 +3805,25 @@
         <div class="sheet-title">${DAY_FULL[dow]}</div>
         <div class="sheet-field">
           <label class="sheet-label">Dinner</label>
-          <input type="text" class="sheet-input" id="sheet-meal-name"
-                 placeholder="e.g. Lemon Chicken" maxlength="80" value="${escHtml(mealName)}">
+          <div class="meal-name-wrap">
+            <input type="text" class="sheet-input" id="sheet-meal-name"
+                   placeholder="e.g. Lemon Chicken" maxlength="80"
+                   value="${escHtml(mealName)}" autocomplete="off"
+                   oninput="onMealNameInput(this.value)">
+            <div class="meal-autocomplete-list" id="meal-autocomplete" style="display:none"></div>
+          </div>
         </div>
         <div class="sheet-field">
           <label class="sheet-label">Ingredients <span style="opacity:0.45">(optional)</span></label>
           <div class="meal-ing-list" id="meal-ing-list"></div>
           <div class="meal-add-ing-btn" onclick="addIngredientRow()">+ Add ingredient</div>
         </div>
-        <button class="sheet-save-btn" onclick="saveMeal()">Save Dinner</button>
+        <label class="meal-template-toggle">
+          <span class="meal-template-toggle-label">Save as reusable template</span>
+          <input type="checkbox" id="sheet-save-template">
+          <div class="meal-toggle-track"></div>
+        </label>
+        <button class="sheet-save-btn" onclick="saveMeal()" style="margin-top:14px">Save Dinner</button>
         ${deleteLink}
       `;
 
@@ -3806,6 +3878,76 @@
 
     function removeIngredientRow(el) {
       el.closest('.meal-ing-row').remove();
+    }
+
+    // ── Meal name autocomplete ──
+    let mealTemplates = []; // cached after first load
+
+    async function loadMealTemplates() {
+      if (mealTemplates.length > 0) return;
+      const { data } = await db.from('meal_templates').select('id, name').order('name');
+      mealTemplates = data || [];
+    }
+
+    async function onMealNameInput(val) {
+      await loadMealTemplates();
+      const ac = document.getElementById('meal-autocomplete');
+      if (!ac) return;
+      const q = val.trim().toLowerCase();
+      if (!q) { ac.style.display = 'none'; return; }
+
+      const matches = mealTemplates.filter(t => t.name.toLowerCase().includes(q)).slice(0, 5);
+      if (matches.length === 0) { ac.style.display = 'none'; return; }
+
+      ac.innerHTML = matches.map(t =>
+        `<div class="meal-autocomplete-item" onclick="selectMealTemplate('${t.id}', ${JSON.stringify(t.name)})">${escHtml(t.name)}</div>`
+      ).join('');
+      ac.style.display = 'block';
+    }
+
+    async function selectMealTemplate(templateId, name) {
+      document.getElementById('sheet-meal-name').value = name;
+      document.getElementById('meal-autocomplete').style.display = 'none';
+
+      // Load template ingredients
+      const { data: ings } = await db.from('template_ingredients')
+        .select('*').eq('template_id', templateId);
+
+      // Clear existing rows and populate from template
+      document.getElementById('meal-ing-list').innerHTML = '';
+      mealIngRowCount = 0;
+      (ings || []).forEach(ing => addIngredientRow({ name: ing.name, store: ing.store }));
+    }
+
+    async function saveAsTemplate(mealName) {
+      // Avoid duplicates — update if exists, insert if not
+      const { data: existing } = await db.from('meal_templates')
+        .select('id').eq('name', mealName).single();
+
+      let templateId;
+      if (existing?.id) {
+        templateId = existing.id;
+        // Delete old ingredients and re-insert fresh
+        await db.from('template_ingredients').delete().eq('template_id', templateId);
+      } else {
+        const { data: newT } = await db.from('meal_templates')
+          .insert({ name: mealName, created_by: session.id }).select('id').single();
+        templateId = newT?.id;
+        if (templateId) mealTemplates = []; // bust cache
+      }
+
+      if (!templateId) return;
+
+      const rows = document.querySelectorAll('#meal-ing-list .meal-ing-row');
+      const toInsert = [];
+      rows.forEach(row => {
+        const name  = (row.querySelector('.meal-ing-name-input')?.value || '').trim();
+        const store = row.querySelector('.meal-store-pill.active')?.dataset?.store || 'other';
+        if (name) toInsert.push({ template_id: templateId, name, store });
+      });
+      if (toInsert.length > 0) {
+        await db.from('template_ingredients').insert(toInsert);
+      }
     }
 
     async function saveMeal() {
@@ -3864,6 +4006,10 @@
         }
 
         closeAddSheet();
+        // Save as template if toggled
+        if (document.getElementById('sheet-save-template')?.checked) {
+          await saveAsTemplate(mealName);
+        }
         showToast('Dinner saved ✓');
         await loadMeals();
         await updateHomeDinnerPreview();
