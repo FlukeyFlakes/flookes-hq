@@ -1674,6 +1674,7 @@
 
       // Wire up swipe on each row
       document.querySelectorAll('.swipe-row').forEach(row => {
+        if (row.dataset.swipeDisabled) return;
         const taskId = row.dataset.taskId;
         const task = allTasks.find(t => t.id === taskId);
         if (task) initSwipe(row, task);
@@ -1730,12 +1731,22 @@
       if (isPending) duePart = `<span style="color:#D97706">Awaiting approval</span>`;
 
       const assignedName = memberName(task.assigned_to);
-      const nudgeLabel   = `👋 Nudge ${assignedName}`;
+      // Swipe actions — gated by role
+      const canDelete = session.role === 'parent' ||
+                        (session.role === 'kid' && !task.is_chore && task.assigned_to === session.id);
+      const canNudge  = session.role === 'parent';
+
+      const leftReveal  = canNudge
+        ? `<div class="swipe-reveal swipe-reveal-left">${nudgeLabel}</div>` : '';
+      const rightReveal = canDelete
+        ? `<div class="swipe-reveal swipe-reveal-right">🗑 Delete</div>` : '';
+      // If neither action available, disable swipe entirely
+      const swipeAttr = (!canNudge && !canDelete) ? 'data-swipe-disabled="true"' : '';
 
       return `
-        <div class="swipe-row" data-task-id="${task.id}">
-          <div class="swipe-reveal swipe-reveal-left">${nudgeLabel}</div>
-          <div class="swipe-reveal swipe-reveal-right">🗑 Delete</div>
+        <div class="swipe-row" data-task-id="${task.id}" ${swipeAttr}>
+          ${leftReveal}
+          ${rightReveal}
           <div class="task-card ${cardState}">
             <div class="task-check ${checkClass} ${checkOnClick ? 'interactive' : ''}" ${checkOnClick}>${checkIcon}</div>
             <div class="priority-dot ${task.priority}"></div>
@@ -1994,14 +2005,20 @@
 
       let tasks = allTasks.length > 0 ? allTasks : await fetchTasks();
 
-      // Items due today or overdue, incomplete
-      const todayStr = new Date().toDateString();
+      // Items due today or overdue, incomplete — plus any open race chores for kids
       let preview = tasks.filter(t => {
         if (t.completed_at) return false;
-        if (session.role === 'kid' && t.assigned_to !== session.id) return false;
+        // Kids: include their own tasks/chores + open race chores
+        if (session.role === 'kid') {
+          const isOwn  = t.assigned_to === session.id;
+          const isRace = t.open_to_kids === true;
+          if (!isOwn && !isRace) return false;
+        }
+        // Always include race chores (no due date needed)
+        if (t.open_to_kids) return true;
+        // Otherwise require a due date that is today or overdue
         if (!t.due_date) return false;
-        const due = new Date(t.due_date);
-        return due <= new Date();
+        return new Date(t.due_date) <= new Date();
       });
 
       // For parents: pending approval chores at the top
