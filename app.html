@@ -873,7 +873,6 @@
 
     // ── Calendar ──────────────────────────────────────────────
     const WORKER_URL = 'https://flookes-calendar.flookes.workers.dev';
-    const JONATHAN_CAL_ID = 'flookes@gmail.com';
 
     function formatTime(dateTimeStr) {
       if (!dateTimeStr) return '';
@@ -888,7 +887,7 @@
     async function loadCalendar() {
       const container = document.getElementById('calendar-content');
       try {
-        const res = await fetch(`${WORKER_URL}?calendarId=${encodeURIComponent(JONATHAN_CAL_ID)}`);
+        const res = await fetch(WORKER_URL);
         const data = await res.json();
 
         if (!data.items || data.items.length === 0) {
