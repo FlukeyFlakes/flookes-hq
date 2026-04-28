@@ -521,9 +521,9 @@
     let attempts = 0;
 
     // ── Utility ──────────────────────────────────────────────
-    function sha256(text) {
+    function hashPIN(text) {
       // Uses js-sha256 CDN library — works on HTTP and HTTPS
-      return window.sha256(text);
+      return sha256(text);
     }
 
     function getLockoutKey(id) { return `fhq_lockout_${id}`; }
@@ -690,7 +690,7 @@
     }
 
     async function verifyPin() {
-      const hash = sha256(pinBuffer);
+      const hash = hashPIN(pinBuffer);
 
       try {
         const { data, error } = await db
