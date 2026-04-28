@@ -120,7 +120,7 @@
       background: linear-gradient(135deg, rgba(30,60,100,0.35) 0%, rgba(10,10,12,0.6) 100%);
       border: 1px solid rgba(100,160,255,0.15);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 20px 20px 14px;
       margin-bottom: 16px;
       overflow: hidden;
       position: relative;
@@ -137,6 +137,24 @@
     .weather-loading-icon { font-size: 1.4rem; animation: pulse 2s ease-in-out infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
+    /* Slider container */
+    .weather-slider {
+      display: flex;
+      overflow: hidden;
+      width: 100%;
+      touch-action: pan-y;
+      cursor: grab;
+    }
+    .weather-slider.dragging { cursor: grabbing; }
+
+    .weather-panel {
+      min-width: 100%;
+      width: 100%;
+      flex-shrink: 0;
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* Today panel */
     .weather-today {
       display: flex;
       align-items: center;
@@ -182,9 +200,49 @@
     .weather-divider {
       height: 1px;
       background: rgba(255,255,255,0.06);
-      margin: 16px 0;
+      margin: 14px 0;
     }
 
+    /* Hourly strip */
+    .weather-hourly {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .hourly-slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255,255,255,0.03);
+      border-radius: 10px;
+      padding: 8px 4px;
+    }
+
+    .hourly-time {
+      font-size: 0.6rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: rgba(140,190,255,0.6);
+    }
+
+    .hourly-icon { font-size: 1.3rem; line-height: 1; }
+
+    .hourly-temp {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .hourly-desc {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.3;
+    }
+
+    /* 3-day forecast panel */
     .weather-forecast {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -195,10 +253,10 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      gap: 4px;
+      gap: 6px;
       background: rgba(255,255,255,0.03);
       border-radius: 12px;
-      padding: 10px 6px;
+      padding: 14px 6px;
     }
 
     .forecast-name {
@@ -208,10 +266,17 @@
       color: var(--text-muted);
     }
 
-    .forecast-icon { font-size: 1.6rem; line-height: 1; }
+    .forecast-icon { font-size: 1.8rem; line-height: 1; }
+
+    .forecast-desc {
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.3;
+    }
 
     .forecast-hi {
-      font-size: 0.9rem;
+      font-size: 0.95rem;
       font-weight: 600;
       color: var(--text);
     }
@@ -219,6 +284,28 @@
     .forecast-lo {
       font-size: 0.75rem;
       color: var(--text-muted);
+    }
+
+    /* Swipe dots */
+    .weather-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin-top: 12px;
+    }
+
+    .weather-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      transition: background 0.2s ease, transform 0.2s ease;
+      cursor: pointer;
+    }
+
+    .weather-dot.active {
+      background: rgba(140,190,255,0.8);
+      transform: scale(1.3);
     }
 
     /* ── Section card ── */
@@ -330,28 +417,46 @@
       <div class="greeting-sub" id="greeting-sub">Here's your day at a glance.</div>
     </div>
 
-    <!-- Weather Widget -->
+    <!-- Weather Widget (swipeable) -->
     <div class="weather-card" id="weather-card">
       <div class="weather-loading" id="weather-loading">
         <span class="weather-loading-icon">🌤️</span>
         <span>Loading weather...</span>
       </div>
-      <div class="weather-content" id="weather-content" style="display:none">
-        <!-- Today -->
-        <div class="weather-today">
-          <div class="weather-left">
-            <div class="weather-location">📍 Napa, CA</div>
-            <div class="weather-temp" id="weather-temp">--°</div>
-            <div class="weather-desc" id="weather-desc">--</div>
-            <div class="weather-hi-lo" id="weather-hi-lo">H: --° · L: --°</div>
+      <div class="weather-slider" id="weather-slider" style="display:none">
+
+        <!-- Panel 1: Today -->
+        <div class="weather-panel">
+          <div class="weather-today">
+            <div class="weather-left">
+              <div class="weather-location">📍 Napa, CA</div>
+              <div class="weather-temp" id="weather-temp">--°</div>
+              <div class="weather-desc" id="weather-desc">--</div>
+              <div class="weather-hi-lo" id="weather-hi-lo">H: --° · L: --°</div>
+            </div>
+            <div class="weather-icon-big" id="weather-icon-big">🌤️</div>
           </div>
-          <div class="weather-icon-big" id="weather-icon-big">🌤️</div>
+          <div class="weather-divider"></div>
+          <!-- Hourly strip -->
+          <div class="weather-hourly" id="weather-hourly">
+            <!-- Injected by JS -->
+          </div>
         </div>
-        <!-- 3-day outlook -->
-        <div class="weather-divider"></div>
-        <div class="weather-forecast" id="weather-forecast">
-          <!-- Injected by JS -->
+
+        <!-- Panel 2: 3-Day Forecast -->
+        <div class="weather-panel">
+          <div class="weather-location" style="margin-bottom:14px">📅 3-Day Outlook</div>
+          <div class="weather-forecast" id="weather-forecast">
+            <!-- Injected by JS -->
+          </div>
         </div>
+
+      </div>
+
+      <!-- Swipe dots -->
+      <div class="weather-dots" id="weather-dots" style="display:none">
+        <div class="weather-dot active" data-i="0"></div>
+        <div class="weather-dot" data-i="1"></div>
       </div>
     </div>
 
@@ -499,9 +604,10 @@
     }
 
     // ── Weather ───────────────────────────────────────────────
-    // Napa, CA coordinates
     const WEATHER_LAT = 38.2975;
     const WEATHER_LON = -122.2869;
+    const HOURLY_TIMES = [8, 12, 17, 20]; // 8AM, 12PM, 5PM, 8PM
+    const HOURLY_LABELS = ['8 AM', '12 PM', '5 PM', '8 PM'];
 
     function weatherCodeToEmoji(code) {
       if (code === 0) return '☀️';
@@ -517,7 +623,7 @@
     }
 
     function weatherCodeToDesc(code) {
-      if (code === 0) return 'Clear skies';
+      if (code === 0) return 'Clear';
       if (code === 1) return 'Mostly clear';
       if (code === 2) return 'Partly cloudy';
       if (code === 3) return 'Overcast';
@@ -525,27 +631,36 @@
       if (code <= 59) return 'Drizzle';
       if (code <= 69) return 'Rainy';
       if (code <= 79) return 'Snow';
-      if (code <= 84) return 'Rain showers';
-      if (code <= 99) return 'Thunderstorms';
+      if (code <= 84) return 'Showers';
+      if (code <= 99) return 'Storms';
       return 'Mixed';
     }
 
     function getDayName(dateStr, index) {
-      if (index === 0) return 'Today';
+      if (index === 1) return 'Tomorrow';
       const d = new Date(dateStr + 'T12:00:00');
-      return d.toLocaleDateString('en-US', { weekday: 'short' });
+      return d.toLocaleDateString('en-US', { weekday: 'long' });
     }
 
     async function loadWeather() {
       try {
-        const url = `https://api.open-meteo.com/v1/forecast?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=4`;
+        const url = `https://api.open-meteo.com/v1/forecast`
+          + `?latitude=${WEATHER_LAT}&longitude=${WEATHER_LON}`
+          + `&current=temperature_2m,weather_code`
+          + `&hourly=temperature_2m,weather_code`
+          + `&daily=weather_code,temperature_2m_max,temperature_2m_min`
+          + `&temperature_unit=fahrenheit`
+          + `&timezone=America%2FLos_Angeles`
+          + `&forecast_days=4`;
+
         const res = await fetch(url);
         const data = await res.json();
 
         const cur = data.current;
         const daily = data.daily;
+        const hourly = data.hourly;
 
-        // Today
+        // ── Today panel ──
         const temp = Math.round(cur.temperature_2m);
         const code = cur.weather_code;
         const hi = Math.round(daily.temperature_2m_max[0]);
@@ -556,7 +671,29 @@
         document.getElementById('weather-hi-lo').textContent = `H: ${hi}° · L: ${lo}°`;
         document.getElementById('weather-icon-big').textContent = weatherCodeToEmoji(code);
 
-        // 3-day forecast (days 1, 2, 3 — skip today which is index 0)
+        // ── Hourly strip ──
+        // hourly.time is an array of ISO strings like "2026-04-27T08:00"
+        const today = new Date().toISOString().slice(0, 10);
+        const hourlyEl = document.getElementById('weather-hourly');
+        hourlyEl.innerHTML = '';
+
+        HOURLY_TIMES.forEach((targetHour, i) => {
+          // Find the index matching today + target hour
+          const targetStr = `${today}T${String(targetHour).padStart(2,'0')}:00`;
+          const idx = hourly.time.indexOf(targetStr);
+          if (idx === -1) return;
+          const hTemp = Math.round(hourly.temperature_2m[idx]);
+          const hCode = hourly.weather_code[idx];
+          hourlyEl.innerHTML += `
+            <div class="hourly-slot">
+              <div class="hourly-time">${HOURLY_LABELS[i]}</div>
+              <div class="hourly-icon">${weatherCodeToEmoji(hCode)}</div>
+              <div class="hourly-temp">${hTemp}°</div>
+              <div class="hourly-desc">${weatherCodeToDesc(hCode)}</div>
+            </div>`;
+        });
+
+        // ── 3-day forecast panel ──
         const forecastEl = document.getElementById('weather-forecast');
         forecastEl.innerHTML = '';
         for (let i = 1; i <= 3; i++) {
@@ -568,19 +705,82 @@
             <div class="forecast-day">
               <div class="forecast-name">${dayName}</div>
               <div class="forecast-icon">${weatherCodeToEmoji(dayCode)}</div>
+              <div class="forecast-desc">${weatherCodeToDesc(dayCode)}</div>
               <div class="forecast-hi">${dayHi}°</div>
               <div class="forecast-lo">${dayLo}°</div>
             </div>`;
         }
 
-        // Show content
+        // Show slider + dots
         document.getElementById('weather-loading').style.display = 'none';
-        document.getElementById('weather-content').style.display = 'block';
+        document.getElementById('weather-slider').style.display = 'flex';
+        document.getElementById('weather-dots').style.display = 'flex';
+
+        // ── Swipe logic ──
+        initWeatherSwipe();
 
       } catch(e) {
         document.getElementById('weather-loading').innerHTML =
           '<span>🌥️</span><span style="color:var(--text-muted)">Weather unavailable</span>';
       }
+    }
+
+    function initWeatherSwipe() {
+      const slider = document.getElementById('weather-slider');
+      const panels = slider.querySelectorAll('.weather-panel');
+      const dots = document.querySelectorAll('.weather-dot');
+      let currentPanel = 0;
+      let startX = 0;
+      let isDragging = false;
+      let dragDelta = 0;
+
+      function goTo(index) {
+        currentPanel = Math.max(0, Math.min(panels.length - 1, index));
+        const offset = -currentPanel * 100;
+        panels.forEach(p => p.style.transform = `translateX(${offset}%)`);
+        dots.forEach((d, i) => d.classList.toggle('active', i === currentPanel));
+      }
+
+      // Dot clicks
+      dots.forEach(d => d.addEventListener('click', () => goTo(parseInt(d.dataset.i))));
+
+      // Touch events
+      slider.addEventListener('touchstart', e => {
+        startX = e.touches[0].clientX;
+        isDragging = true;
+      }, { passive: true });
+
+      slider.addEventListener('touchmove', e => {
+        if (!isDragging) return;
+        dragDelta = e.touches[0].clientX - startX;
+      }, { passive: true });
+
+      slider.addEventListener('touchend', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (dragDelta < -50) goTo(currentPanel + 1);
+        else if (dragDelta > 50) goTo(currentPanel - 1);
+        dragDelta = 0;
+      });
+
+      // Mouse events (desktop)
+      slider.addEventListener('mousedown', e => {
+        startX = e.clientX;
+        isDragging = true;
+        slider.classList.add('dragging');
+      });
+      window.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        dragDelta = e.clientX - startX;
+      });
+      window.addEventListener('mouseup', () => {
+        if (!isDragging) return;
+        isDragging = false;
+        slider.classList.remove('dragging');
+        if (dragDelta < -50) goTo(currentPanel + 1);
+        else if (dragDelta > 50) goTo(currentPanel - 1);
+        dragDelta = 0;
+      });
     }
 
     // ── Navigation (placeholder) ─────────────────────────────
