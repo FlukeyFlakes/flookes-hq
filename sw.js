@@ -1,5 +1,5 @@
 // sw.js — Flookes HQ Service Worker
-const CACHE    = 'flookes-hq-v1';
+const CACHE    = 'flookes-hq-v2';
 const PRECACHE = ['/', '/index.html', '/app.html', '/manifest.json'];
 
 self.addEventListener('install', e => {
