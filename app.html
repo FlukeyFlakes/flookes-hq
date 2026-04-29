@@ -3739,12 +3739,20 @@
       btn.disabled = true;
       btn.textContent = 'Saving…';
 
-      await db.from('savings_goals').insert({
+      const { error } = await db.from('savings_goals').insert({
         family_member_id: bankSheetKidId,
         title,
         target_amount: target,
         created_by:    session.id
       });
+
+      if (error) {
+        console.error('Goal insert failed:', error);
+        showToast('Could not save goal — try again.');
+        btn.disabled = false;
+        btn.textContent = 'Add Goal';
+        return;
+      }
 
       closeAddSheet();
       showToast('Goal added ✓');
