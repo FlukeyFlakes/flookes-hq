@@ -1692,6 +1692,97 @@
     }
     .meal-delete-link:active { opacity: 1; }
 
+    /* ── Recipe Import Panel ── */
+    .recipe-import-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: 100%;
+      padding: 10px;
+      background: rgba(var(--user-rgb), 0.07);
+      border: 1px solid rgba(var(--user-rgb), 0.25);
+      border-radius: 12px;
+      font-size: 0.82rem;
+      color: var(--user-color);
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .recipe-import-btn:active { background: rgba(var(--user-rgb), 0.14); }
+
+    .recipe-import-panel {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+
+    .recipe-import-tabs {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    .recipe-import-tab {
+      flex: 1;
+      text-align: center;
+      padding: 7px 4px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .recipe-import-tab.active {
+      background: rgba(var(--user-rgb), 0.12);
+      border-color: rgba(var(--user-rgb), 0.4);
+      color: var(--user-color);
+    }
+
+    .recipe-import-input {
+      width: 100%;
+      margin-bottom: 10px;
+    }
+    .recipe-import-textarea {
+      resize: none;
+      height: 90px;
+      font-size: 0.82rem;
+      line-height: 1.5;
+    }
+
+    .recipe-photo-drop {
+      width: 100%;
+      padding: 18px;
+      border: 1.5px dashed rgba(var(--user-rgb), 0.3);
+      border-radius: 12px;
+      text-align: center;
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      cursor: pointer;
+      margin-bottom: 10px;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .recipe-extract-btn {
+      width: 100%;
+      padding: 11px;
+      background: rgba(var(--user-rgb), 0.15);
+      border: 1px solid rgba(var(--user-rgb), 0.35);
+      border-radius: 12px;
+      color: var(--user-color);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+      font-family: 'DM Sans', sans-serif;
+    }
+    .recipe-extract-btn:active { background: rgba(var(--user-rgb), 0.25); }
+    .recipe-extract-btn:disabled { opacity: 0.5; cursor: default; }
+
     /* ══════════════════════════════════════════════
        SHOPPING LIST
     ══════════════════════════════════════════════ */
@@ -2121,6 +2212,7 @@
 
     const WORKER_URL    = 'https://flookes-calendar.flookes.workers.dev';
     const PUSH_WORKER   = 'https://flookes-hq-push.flookes.workers.dev';
+    const AI_WORKER     = 'https://flookes-ai.flookes.workers.dev';
     const VAPID_PUB_KEY = 'BCd2GAaRgwgXDVePLAf8QKpyoVhR7u2zV3fve12UD4XeV96uNSRCKxmoM99QEIWQnZGXOiYlwyC-q4VH2GwHQdM';
     const WEATHER_LAT = 38.2975;
     const WEATHER_LON = -122.2869;
@@ -4188,6 +4280,30 @@
         </div>
         <div class="sheet-field">
           <label class="sheet-label">Ingredients <span style="opacity:0.45">(optional)</span></label>
+          <div class="recipe-import-btn" id="recipe-import-toggle" onclick="toggleImportPanel()">✨ Import from recipe</div>
+          <div class="recipe-import-panel" id="recipe-import-panel" style="display:none">
+            <div class="recipe-import-tabs">
+              <div class="recipe-import-tab active" onclick="setImportTab('url',this)">🔗 Link</div>
+              <div class="recipe-import-tab" onclick="setImportTab('text',this)">📋 Text</div>
+              <div class="recipe-import-tab" onclick="setImportTab('photo',this)">📸 Photo</div>
+            </div>
+            <div id="recipe-import-url-area">
+              <input type="url" class="sheet-input recipe-import-input" id="recipe-url-input"
+                     placeholder="https://..." autocomplete="off" autocorrect="off" autocapitalize="none">
+            </div>
+            <div id="recipe-import-text-area" style="display:none">
+              <textarea class="sheet-input recipe-import-input recipe-import-textarea"
+                        id="recipe-text-input" placeholder="Paste recipe text or caption here…"></textarea>
+            </div>
+            <div id="recipe-import-photo-area" style="display:none">
+              <div class="recipe-photo-drop" onclick="document.getElementById('recipe-photo-input').click()">
+                <span id="recipe-photo-label">📸 Tap to choose screenshot</span>
+              </div>
+              <input type="file" id="recipe-photo-input" accept="image/*" style="display:none"
+                     onchange="onPhotoSelected(this)">
+            </div>
+            <button class="recipe-extract-btn" id="recipe-extract-btn" onclick="runRecipeImport()">Extract Ingredients</button>
+          </div>
           <div class="meal-ing-list" id="meal-ing-list"></div>
           <div class="meal-add-ing-btn" onclick="addIngredientRow()">+ Add ingredient</div>
         </div>
@@ -4247,6 +4363,110 @@
       const container = document.getElementById(`store-pills-${idx}`);
       container.querySelectorAll('.meal-store-pill').forEach(p => p.classList.remove('active'));
       el.classList.add('active');
+    }
+
+    // ── Recipe Import ─────────────────────────────────────────
+    let importTab = 'url';
+    let importPhotoBase64 = null;
+    let importConfirmPending = false;
+    let importConfirmTimer = null;
+
+    function toggleImportPanel() {
+      const panel = document.getElementById('recipe-import-panel');
+      const btn   = document.getElementById('recipe-import-toggle');
+      if (!panel || !btn) return;
+      const isOpen = panel.style.display !== 'none';
+      panel.style.display = isOpen ? 'none' : 'block';
+      btn.textContent = isOpen ? '✨ Import from recipe' : '✕ Close import';
+      // Reset state on close
+      if (isOpen) { importPhotoBase64 = null; importConfirmPending = false; }
+    }
+
+    function setImportTab(tab, el) {
+      importTab = tab;
+      document.querySelectorAll('.recipe-import-tab').forEach(t => t.classList.remove('active'));
+      el.classList.add('active');
+      document.getElementById('recipe-import-url-area').style.display  = tab === 'url'   ? 'block' : 'none';
+      document.getElementById('recipe-import-text-area').style.display = tab === 'text'  ? 'block' : 'none';
+      document.getElementById('recipe-import-photo-area').style.display= tab === 'photo' ? 'block' : 'none';
+    }
+
+    function onPhotoSelected(input) {
+      const file = input.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        importPhotoBase64 = e.target.result.split(',')[1];
+        const label = document.getElementById('recipe-photo-label');
+        if (label) label.textContent = `✅ ${file.name}`;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async function runRecipeImport() {
+      // Confirm before replacing existing rows
+      const existingCount = document.querySelectorAll('#meal-ing-list .meal-ing-row').length;
+      if (existingCount > 0 && !importConfirmPending) {
+        importConfirmPending = true;
+        showToast(`Tap Extract again to replace ${existingCount} ingredient${existingCount !== 1 ? 's' : ''}`);
+        importConfirmTimer = setTimeout(() => { importConfirmPending = false; }, 3000);
+        return;
+      }
+      clearTimeout(importConfirmTimer);
+      importConfirmPending = false;
+
+      const btn = document.getElementById('recipe-extract-btn');
+      if (!btn) return;
+      btn.disabled = true;
+      btn.textContent = 'Extracting…';
+
+      let body;
+      try {
+        if (importTab === 'url') {
+          const url = document.getElementById('recipe-url-input')?.value?.trim();
+          if (!url) { showToast('Paste a URL first'); return; }
+          body = { url };
+        } else if (importTab === 'text') {
+          const text = document.getElementById('recipe-text-input')?.value?.trim();
+          if (!text) { showToast('Paste some recipe text first'); return; }
+          body = { text };
+        } else {
+          if (!importPhotoBase64) { showToast('Choose a photo first'); return; }
+          body = { image: importPhotoBase64 };
+        }
+
+        const res  = await fetch(`${AI_WORKER}/recipe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.ingredients?.length) throw new Error('No ingredients found in that recipe');
+
+        populateImportedIngredients(data.ingredients);
+
+        // Collapse panel
+        const panel = document.getElementById('recipe-import-panel');
+        const toggle = document.getElementById('recipe-import-toggle');
+        if (panel) panel.style.display = 'none';
+        if (toggle) toggle.textContent = '✨ Import from recipe';
+        importPhotoBase64 = null;
+
+        showToast(`✨ Imported ${data.ingredients.length} ingredient${data.ingredients.length !== 1 ? 's' : ''}`);
+
+      } catch (e) {
+        showToast(e.message || 'Import failed — try again');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Extract Ingredients';
+      }
+    }
+
+    function populateImportedIngredients(ingredients) {
+      document.getElementById('meal-ing-list').innerHTML = '';
+      mealIngRowCount = 0;
+      ingredients.forEach(ing => addIngredientRow({ name: ing.name, store: ing.store || 'other' }));
     }
 
     function removeIngredientRow(el) {
