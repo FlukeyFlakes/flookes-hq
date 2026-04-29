@@ -1856,6 +1856,30 @@
     }
     .sheet-input-sm:focus { border-color: rgba(var(--user-rgb), 0.5); }
     .sheet-input-sm::placeholder { color: var(--text-muted); }
+    /* ── Push notification banner ── */
+    .push-banner {
+      background: rgba(var(--user-rgb), 0.10);
+      border: 1px solid rgba(var(--user-rgb), 0.22);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .push-banner span { font-size: 0.85rem; flex: 1; }
+    .push-banner-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .push-banner-btn {
+      background: var(--user-color); color: #0A0A0C;
+      border: none; border-radius: 100px;
+      padding: 6px 16px; font-size: 0.8rem; font-weight: 600;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+    }
+    .push-banner-dismiss {
+      background: none; border: none;
+      color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 4px 8px;
+    }
   </style>
 </head>
 <body>
@@ -1879,6 +1903,15 @@
         <div class="greeting-time" id="greeting-time">Good Morning</div>
         <div class="greeting-text" id="greeting-name">Welcome back!</div>
         <div class="greeting-sub" id="greeting-sub">Here's your day at a glance.</div>
+      </div>
+
+      <!-- Push notification banner (shown once) -->
+      <div id="push-banner" class="push-banner" style="display:none">
+        <span>🔔 Get notified about chores, dinner &amp; bank updates</span>
+        <div class="push-banner-actions">
+          <button class="push-banner-btn" onclick="subscribeToPush()">Turn on</button>
+          <button class="push-banner-dismiss" onclick="dismissPushBanner()">&#x2715;</button>
+        </div>
       </div>
 
       <!-- Weather Widget -->
@@ -2082,7 +2115,9 @@
     const SUPABASE_ANON_KEY = 'sb_publishable_TMqE0djUkHy9F1J_ye2Ytg_QebA9bTL';
     const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    const WORKER_URL = 'https://flookes-calendar.flookes.workers.dev';
+    const WORKER_URL    = 'https://flookes-calendar.flookes.workers.dev';
+    const PUSH_WORKER   = 'https://flookes-hq-push.flookes.workers.dev';
+    const VAPID_PUB_KEY = 'BCd2GAaRgwgXDVePLAf8QKpyoVhR7u2zV3fve12UD4XeV96uNSRCKxmoM99QEIWQnZGXOiYlwyC-q4VH2GwHQdM';
     const WEATHER_LAT = 38.2975;
     const WEATHER_LON = -122.2869;
     const HOURLY_TIMES  = [8, 12, 17, 20];
@@ -2249,6 +2284,7 @@
         updateHomeTasksPreview();
         updateHomeBankPreview();
         updateHomeDinnerPreview();
+        showPushBanner();
       }
     }
 
@@ -2709,6 +2745,7 @@
             showToast(`${winnerName} already got this one! 🏃`);
           } else {
             showToast('Chore claimed! Waiting for approval ⏳');
+            notifyParents('Chore claimed! ✋', memberName(session.id) + ' grabbed "' + task.title + '" — approve when done', 'chore-pending');
           }
         } else {
           // Normal chore: kid marks their own done
@@ -2719,6 +2756,7 @@
             completed_by: session.id
           }).eq('id', taskId);
           showToast('Marked done — waiting for approval ⏳');
+          notifyParents('Chore done! ✓', memberName(session.id) + ' finished "' + task.title + '" — tap to approve', 'chore-pending');
         }
       } else {
         // Task → complete immediately
@@ -2773,6 +2811,7 @@
 
         const name = memberName(task.assigned_to);
         showToast(`✓ Approved! $${amount.toFixed(2)} added to ${name}'s bank 💰`);
+        sendPush(task.assigned_to, 'Chore approved! 💰', `$${amount.toFixed(2)} added to your bank for "${task.title}"`, 'bank-deposit');
       } else {
         showToast('Chore approved ✓');
       }
@@ -2812,7 +2851,7 @@
 
       localStorage.setItem(lastNudgeKey, Date.now());
       showToast(`Nudge sent to ${name} 👋`);
-      // TODO: fire real push notification here when notifications phase is built
+      sendPush(task.assigned_to, 'Nudge from ' + memberName(session.id) + ' 👋', `Time to tackle "${task.title}"!`, 'nudge-' + task.id);
     }
 
     async function refreshTasks() {
@@ -4427,13 +4466,88 @@
       }
       localStorage.setItem(key, Date.now());
       showToast('Nudge sent to Mom & Dad 👀');
-      // TODO: fire real push notification when notifications phase is built
+      notifyParents('Dinner nudge 👀', memberName(session.id) + ' wants to know what\'s for dinner!', 'dinner-nudge');
+    }
+
+
+    // ════════════════════════════════════════════════
+    //  PUSH NOTIFICATIONS
+    // ════════════════════════════════════════════════
+    function showPushBanner() {
+      if (localStorage.getItem('fhq_push_dismissed')) return;
+      if (localStorage.getItem('fhq_push_subscribed')) return;
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'denied') return;
+      const el = document.getElementById('push-banner');
+      if (el) el.style.display = 'flex';
+    }
+    function hidePushBanner() {
+      const el = document.getElementById('push-banner');
+      if (el) el.style.display = 'none';
+    }
+    function dismissPushBanner() {
+      localStorage.setItem('fhq_push_dismissed', '1');
+      hidePushBanner();
+    }
+    function urlB64ToUint8Array(b64) {
+      const padding = '='.repeat((4 - b64.length % 4) % 4);
+      const base64  = (b64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const raw     = atob(base64);
+      const out     = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+      return out;
+    }
+    async function subscribeToPush() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+        showToast('Push notifications not supported on this device.');
+        return;
+      }
+      try {
+        const permission = await Notification.requestPermission();
+        if (permission !== 'granted') { dismissPushBanner(); return; }
+        const reg = await navigator.serviceWorker.ready;
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlB64ToUint8Array(VAPID_PUB_KEY),
+        });
+        await fetch(PUSH_WORKER + '/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            family_member_id: session.id,
+            subscription:     sub.toJSON(),
+            device_info:      navigator.userAgent.substring(0, 200),
+          }),
+        });
+        localStorage.setItem('fhq_push_subscribed', '1');
+        hidePushBanner();
+        showToast('Notifications on 🔔');
+      } catch (e) {
+        console.error('Push subscribe error:', e);
+        showToast('Could not enable notifications.');
+      }
+    }
+    async function sendPush(targetId, title, body, tag) {
+      try {
+        fetch(PUSH_WORKER + '/send', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ family_member_id: targetId, title, body, tag }),
+        });
+      } catch (_) {}
+    }
+    function notifyParents(title, body, tag) {
+      allFamilyMembers.filter(m => m.role === 'parent').forEach(p => sendPush(p.id, title, body, tag));
     }
 
     // ════════════════════════════════════════════════
     //  BOOT
     // ════════════════════════════════════════════════
     async function boot() {
+      // Register service worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(console.error);
+      }
       loadSession();
       if (!session) return;
       await loadFamilyMembers();

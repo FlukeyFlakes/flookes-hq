@@ -1,79 +1,60 @@
-// Flookes HQ — Service Worker
-const CACHE_NAME = 'flookes-hq-v1';
+// sw.js — Flookes HQ Service Worker
+const CACHE    = 'flookes-hq-v1';
+const PRECACHE = ['/', '/index.html', '/app.html', '/manifest.json'];
 
-const CACHED_ASSETS = [
-  '/',
-  '/index.html',
-  '/app.html',
-  '/manifest.json',
-  'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap'
-];
-
-// Install: cache core assets
-self.addEventListener('install', event => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(CACHED_ASSETS);
-    })
-  );
+self.addEventListener('install', e => {
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)));
   self.skipWaiting();
 });
 
-// Activate: clean up old caches
-self.addEventListener('activate', event => {
-  event.waitUntil(
+self.addEventListener('activate', e => {
+  e.waitUntil(
     caches.keys().then(keys =>
-      Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
     )
   );
   self.clients.claim();
 });
 
-// Fetch: network-first for API, cache-first for assets
-self.addEventListener('fetch', event => {
-  const url = new URL(event.request.url);
-
-  // Always go to network for Supabase API calls
-  if (url.hostname.includes('supabase.co')) {
-    event.respondWith(fetch(event.request).catch(() => new Response('Offline', { status: 503 })));
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  // Network-first for API / dynamic calls
+  if (url.hostname.includes('supabase.co') ||
+      url.hostname.includes('workers.dev') ||
+      url.hostname.includes('googleapis.com') ||
+      url.hostname.includes('open-meteo.com')) {
+    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
     return;
   }
+  // Cache-first for static assets
+  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
+});
 
-  // Cache-first for everything else
-  event.respondWith(
-    caches.match(event.request).then(cached => {
-      return cached || fetch(event.request).then(response => {
-        // Cache successful GET responses
-        if (event.request.method === 'GET' && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => {
-        // Offline fallback
-        if (event.request.mode === 'navigate') {
-          return caches.match('/app.html');
-        }
-      });
+// ── Push notifications ────────────────────────────────────────
+self.addEventListener('push', e => {
+  let data = { title: 'Flookes HQ', body: 'You have a new notification.' };
+  try { data = e.data.json(); } catch (_) {}
+  e.waitUntil(
+    self.registration.showNotification(data.title || 'Flookes HQ', {
+      body:               data.body || '',
+      icon:               '/assets/icon-192.png',
+      badge:              '/assets/icon-192.png',
+      tag:                data.tag  || 'flookes-hq',
+      data:               { url: data.url || '/app.html' },
+      requireInteraction: false,
     })
   );
 });
 
-// Push notifications (to be wired up in a later session)
-self.addEventListener('push', event => {
-  const data = event.data ? event.data.json() : {};
-  const title = data.title || 'Flookes HQ';
-  const options = {
-    body: data.body || '',
-    icon: '/assets/icon-192.png',
-    badge: '/assets/icon-192.png',
-    data: data.url || '/',
-    vibrate: [100, 50, 100]
-  };
-  event.waitUntil(self.registration.showNotification(title, options));
-});
-
-self.addEventListener('notificationclick', event => {
-  event.notification.close();
-  event.waitUntil(clients.openWindow(event.notification.data || '/'));
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const target = 'https://family.flookesitup.com' + (e.notification.data?.url || '/app.html');
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) {
+        if (c.url.startsWith('https://family.flookesitup.com') && 'focus' in c) return c.focus();
+      }
+      return clients.openWindow(target);
+    })
+  );
 });
