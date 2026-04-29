@@ -1712,6 +1712,51 @@
     }
     .recipe-import-btn:active { background: rgba(var(--user-rgb), 0.14); }
 
+    /* ── Meal sheet: two action pills side by side ── */
+    .meal-sheet-action-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .meal-sheet-action-row .recipe-import-btn {
+      flex: 1;
+      margin-bottom: 0;
+    }
+
+    /* ── Week-level suggest button ── */
+    .meal-week-suggest-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 11px;
+      background: rgba(var(--user-rgb), 0.07);
+      border: 1px solid rgba(var(--user-rgb), 0.25);
+      border-radius: 14px;
+      font-size: 0.84rem;
+      color: var(--user-color);
+      cursor: pointer;
+      margin-bottom: 12px;
+      transition: background 0.15s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .meal-week-suggest-btn:active { background: rgba(var(--user-rgb), 0.14); }
+
+    /* ── Undo toast variant ── */
+    .toast-undo-btn {
+      display: none;
+      background: none;
+      border: none;
+      color: var(--user-color);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 600;
+      font-size: 0.84rem;
+      cursor: pointer;
+      margin-left: 14px;
+      padding: 0;
+    }
+    .toast.with-undo { pointer-events: auto; }
+    .toast.with-undo .toast-undo-btn { display: inline; }
+
     .recipe-import-panel {
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--border);
@@ -2197,7 +2242,7 @@
   </div>
 
   <!-- ── Toast ── -->
-  <div class="toast" id="toast"></div>
+  <div class="toast" id="toast"><span id="toast-text"></span><button class="toast-undo-btn" id="toast-undo-btn" onclick="doToastUndo()">Undo</button></div>
 
   <!-- Supabase -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -3256,12 +3301,38 @@
     //  TOAST
     // ════════════════════════════════════════════════
     let toastTimer = null;
+    let toastUndoCallback = null;
+
     function showToast(msg) {
-      const el = document.getElementById('toast');
-      el.textContent = msg;
+      const el  = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      if (txt) txt.textContent = msg; else el.textContent = msg;
+      el.classList.remove('with-undo');
+      toastUndoCallback = null;
       el.classList.add('show');
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+    }
+
+    function showUndoToast(msg, callback) {
+      const el  = document.getElementById('toast');
+      const txt = document.getElementById('toast-text');
+      if (txt) txt.textContent = msg; else el.textContent = msg;
+      toastUndoCallback = callback;
+      el.classList.add('show', 'with-undo');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        el.classList.remove('show', 'with-undo');
+        toastUndoCallback = null;
+      }, 5000);
+    }
+
+    function doToastUndo() {
+      const el = document.getElementById('toast');
+      el.classList.remove('show', 'with-undo');
+      clearTimeout(toastTimer);
+      if (toastUndoCallback) toastUndoCallback();
+      toastUndoCallback = null;
     }
 
     // ════════════════════════════════════════════════
@@ -4198,7 +4269,16 @@
       const mealByDow = {};
       meals.forEach(m => { mealByDow[m.day_of_week] = m; });
 
+      // Count empty non-Tuesday days (Tuesday=2 is always Taco Tuesday)
+      const emptyNonTuesdayCount = [0,1,3,4,5,6].filter(d => !mealByDow[d]).length;
+
       let html = '';
+
+      // Suggest meals button — parents only, only when empty days exist
+      if (isParent && emptyNonTuesdayCount > 0) {
+        html += `<div class="meal-week-suggest-btn" id="meal-week-suggest-btn" onclick="suggestMealsWeek()">✨ Suggest meals</div>`;
+      }
+
       for (let dow = 0; dow <= 6; dow++) {
         const dayDate  = dayDateFromWeekStart(weekStart, dow);
         const isToday  = dayDate === todayStr;
@@ -4268,7 +4348,10 @@
 
       document.getElementById('sheet-body').innerHTML = `
         <div class="sheet-title">${DAY_FULL[dow]}</div>
-        <div class="recipe-import-btn" id="recipe-import-toggle" onclick="toggleImportPanel()">✨ Import from recipe</div>
+        <div class="meal-sheet-action-row">
+          <div class="recipe-import-btn" id="recipe-import-toggle" onclick="toggleImportPanel()">✨ Import from recipe</div>
+          ${mealSheetDayOfWeek !== 2 ? `<div class="recipe-import-btn" id="meal-day-suggest-btn" onclick="suggestMealDay()">🎲 Suggest</div>` : ''}
+        </div>
         <div class="recipe-import-panel" id="recipe-import-panel" style="display:none">
           <div class="recipe-import-tabs">
             <div class="recipe-import-tab active" onclick="setImportTab('url',this)">🔗 Link</div>
@@ -4637,6 +4720,230 @@
       showToast('Meal removed.');
       await loadMeals();
       await updateHomeDinnerPreview();
+    }
+
+    // ── AI Meal Suggestions ───────────────────────────────────
+
+    async function buildCandidatePool() {
+      // 1. Last 8 weeks of meals with their ingredients
+      const cutoff = new Date();
+      cutoff.setDate(cutoff.getDate() - 56);
+      const cutoffStr = cutoff.toISOString().split('T')[0];
+
+      const { data: pastMeals } = await db.from('meals')
+        .select('id, dinner_name, week_start_date, ingredients(name, store)')
+        .gte('week_start_date', cutoffStr)
+        .order('week_start_date', { ascending: false });
+
+      // 2. Templates with template_ingredients
+      const { data: templates } = await db.from('meal_templates')
+        .select('id, name, template_ingredients(name, store)');
+
+      // 3. Build candidate map keyed by lowercase name
+      const map = new Map();
+
+      // Past meals (most recent first — first encounter = canonical name + most recent date)
+      for (const meal of (pastMeals || [])) {
+        const ings = meal.ingredients || [];
+        if (ings.length === 0) continue;
+        const key = meal.dinner_name.toLowerCase().trim();
+        if (!map.has(key)) {
+          map.set(key, {
+            name: meal.dinner_name,
+            lastCooked: meal.week_start_date,
+            count: 1,
+            ingredients: ings.map(i => ({ name: i.name, store: i.store || 'other' })),
+          });
+        } else {
+          map.get(key).count++;
+        }
+      }
+
+      // Templates — override ingredients (templates = canonical version)
+      for (const tmpl of (templates || [])) {
+        const ings = tmpl.template_ingredients || [];
+        if (ings.length === 0) continue;
+        const key = tmpl.name.toLowerCase().trim();
+        if (map.has(key)) {
+          map.get(key).ingredients = ings.map(i => ({ name: i.name, store: i.store || 'other' }));
+        } else {
+          map.set(key, {
+            name: tmpl.name,
+            lastCooked: null,
+            count: 0,
+            ingredients: ings.map(i => ({ name: i.name, store: i.store || 'other' })),
+          });
+        }
+      }
+
+      return Array.from(map.values());
+    }
+
+    async function suggestMealsWeek() {
+      if (session.role !== 'parent') return;
+
+      const weekStart = getMealWeekStartDate(mealWeekOffset);
+
+      const { data: currentMeals } = await db.from('meals')
+        .select('day_of_week, dinner_name')
+        .eq('week_start_date', weekStart);
+
+      const mealByDow = {};
+      (currentMeals || []).forEach(m => { mealByDow[m.day_of_week] = m.dinner_name; });
+
+      const tuesdayEmpty = !mealByDow[2];
+      const emptyDays = [0,1,3,4,5,6].filter(d => !mealByDow[d]);
+
+      const btn = document.getElementById('meal-week-suggest-btn');
+      if (btn) { btn.textContent = '⏳ Thinking…'; btn.style.pointerEvents = 'none'; }
+
+      try {
+        const candidates = await buildCandidatePool();
+        if (candidates.length === 0) {
+          showToast('Add a few meals with ingredients first.');
+          return;
+        }
+
+        const insertedMealIds = [];
+
+        // Taco Tuesday — resolved client-side, never sent to Claude
+        if (tuesdayEmpty) {
+          const tacoCandidate = candidates.find(c => c.name.toLowerCase().includes('taco'));
+          const tacoName = tacoCandidate?.name || 'Taco Tuesday';
+          const tacoIngs = tacoCandidate?.ingredients || [];
+
+          await db.from('meals').insert({
+            week_start_date: weekStart, day_of_week: 2,
+            dinner_name: tacoName, created_by: session.id
+          });
+          const { data: tacoMeal } = await db.from('meals')
+            .select('id').eq('week_start_date', weekStart).eq('day_of_week', 2).single();
+          if (tacoMeal) {
+            insertedMealIds.push(tacoMeal.id);
+            if (tacoIngs.length > 0) {
+              await db.from('ingredients').insert(
+                tacoIngs.map(i => ({ meal_id: tacoMeal.id, name: i.name, store: i.store, quantity: null }))
+              );
+            }
+          }
+        }
+
+        // AI suggestions for remaining empty days
+        if (emptyDays.length > 0) {
+          const res = await fetch(`${AI_WORKER}/suggest`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              mode: 'week',
+              candidates: candidates.map(c => ({ name: c.name, lastCooked: c.lastCooked, count: c.count })),
+              currentWeek: Object.entries(mealByDow).map(([d, name]) => ({ dow: parseInt(d), name })),
+              emptyDays
+            })
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+
+          const suggestions = data.suggestions || [];
+          const byName = new Map(candidates.map(c => [c.name.toLowerCase().trim(), c]));
+
+          for (const s of suggestions) {
+            const candidate = byName.get(s.name.toLowerCase().trim());
+            if (!candidate) continue;
+
+            await db.from('meals').insert({
+              week_start_date: weekStart, day_of_week: s.dow,
+              dinner_name: candidate.name, created_by: session.id
+            });
+            const { data: newMeal } = await db.from('meals')
+              .select('id').eq('week_start_date', weekStart).eq('day_of_week', s.dow).single();
+            if (!newMeal) continue;
+            insertedMealIds.push(newMeal.id);
+
+            if (candidate.ingredients.length > 0) {
+              await db.from('ingredients').insert(
+                candidate.ingredients.map(i => ({
+                  meal_id: newMeal.id, name: i.name, store: i.store, quantity: null
+                }))
+              );
+            }
+          }
+        }
+
+        await loadMeals();
+        await updateHomeDinnerPreview();
+
+        const total = insertedMealIds.length;
+        showUndoToast(`✨ ${total} meal${total !== 1 ? 's' : ''} planned`, async () => {
+          for (const mealId of insertedMealIds) {
+            await db.from('ingredients').delete().eq('meal_id', mealId);
+            await db.from('meals').delete().eq('id', mealId);
+          }
+          await loadMeals();
+          await updateHomeDinnerPreview();
+          showToast('Suggestions cleared.');
+        });
+
+      } catch(e) {
+        console.error('suggestMealsWeek error:', e);
+        showToast(e.message || 'Suggest failed — try again');
+        await loadMeals(); // restore button
+      }
+    }
+
+    async function suggestMealDay() {
+      if (session.role !== 'parent') return;
+
+      const btn = document.getElementById('meal-day-suggest-btn');
+      if (btn) { btn.textContent = '⏳'; btn.style.pointerEvents = 'none'; }
+
+      try {
+        const weekStart = getMealWeekStartDate(mealWeekOffset);
+
+        const { data: currentMeals } = await db.from('meals')
+          .select('day_of_week, dinner_name')
+          .eq('week_start_date', weekStart);
+        const currentWeek = (currentMeals || []).map(m => ({ dow: m.day_of_week, name: m.dinner_name }));
+
+        const candidates = await buildCandidatePool();
+        if (candidates.length === 0) {
+          showToast('Add a few meals with ingredients first.');
+          return;
+        }
+
+        const res = await fetch(`${AI_WORKER}/suggest`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: 'day',
+            candidates: candidates.map(c => ({ name: c.name, lastCooked: c.lastCooked, count: c.count })),
+            currentWeek,
+            dow: mealSheetDayOfWeek
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.name) throw new Error('No suggestion returned');
+
+        const byName = new Map(candidates.map(c => [c.name.toLowerCase().trim(), c]));
+        const candidate = byName.get(data.name.toLowerCase().trim());
+        const mealName = candidate?.name || data.name;
+
+        const nameField = document.getElementById('sheet-meal-name');
+        if (nameField) nameField.value = mealName;
+
+        if (candidate?.ingredients?.length) {
+          document.getElementById('meal-ing-list').innerHTML = '';
+          mealIngRowCount = 0;
+          candidate.ingredients.forEach(ing => addIngredientRow(ing));
+        }
+
+      } catch(e) {
+        console.error('suggestMealDay error:', e);
+        showToast(e.message || 'Suggest failed — try again');
+      } finally {
+        const btn = document.getElementById('meal-day-suggest-btn');
+        if (btn) { btn.textContent = '🎲 Suggest'; btn.style.pointerEvents = ''; }
+      }
     }
 
     // ── Real-time ──
