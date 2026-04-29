@@ -655,6 +655,8 @@
     .task-card {
       position: relative;
       z-index: 1;
+      width: 100%;
+      isolation: isolate;
       display: flex;
       align-items: center;
       gap: 11px;
@@ -663,7 +665,6 @@
       border-radius: 16px;
       padding: 13px 15px;
       transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-      will-change: transform;
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -886,6 +887,17 @@
       padding: 16px 0 4px;
       font-size: 0.85rem;
       color: var(--text-muted);
+    }
+
+    .swipe-hint {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 5px;
+      font-size: 0.6rem;
+      letter-spacing: 0.06em;
+      color: rgba(240,238,232,0.22);
+      pointer-events: none;
+      user-select: none;
     }
 
     .race-badge {
@@ -2098,7 +2110,7 @@
 
       <!-- Tasks Preview -->
       <div class="section-card" id="home-tasks-card">
-        <div class="section-label">✅ Tasks & Chores Due Today</div>
+        <div class="section-label">✅ Tasks & Chores</div>
         <div id="home-tasks-content">
           <div class="calendar-loading">
             <span style="font-size:1.1rem;animation:pulse 2s ease-in-out infinite">✅</span>
@@ -2540,12 +2552,13 @@
           title: latest.title,
           description: latest.description,
           created_by: latest.created_by,
-          assigned_to: latest.assigned_to,
+          assigned_to: latest.open_to_kids ? null : latest.assigned_to,
           priority: latest.priority,
           is_chore: latest.is_chore,
           chore_amount: latest.chore_amount,
           is_recurring: true,
-          recurrence_pattern: latest.recurrence_pattern
+          recurrence_pattern: latest.recurrence_pattern,
+          open_to_kids: latest.open_to_kids || false
         });
       }
 
@@ -2768,6 +2781,12 @@
       // If neither action available, disable swipe entirely
       const swipeAttr = (!canNudge && !canDelete) ? 'data-swipe-disabled="true"' : '';
 
+      const showHint = (canNudge || canDelete) && !isDone && !isPending;
+      const hintLeft  = canNudge  ? '👋 nudge' : '';
+      const hintRight = canDelete ? 'delete 🗑' : '';
+      const swipeHintHtml = showHint
+        ? `<div class="swipe-hint"><span>${hintLeft}</span><span>${hintRight}</span></div>` : '';
+
       return `
         <div class="swipe-row" data-task-id="${task.id}" ${swipeAttr}>
           ${leftReveal}
@@ -2782,6 +2801,7 @@
             </div>
             <div class="task-right">${rightHtml}</div>
           </div>
+          ${swipeHintHtml}
         </div>`;
     }
 
@@ -2874,9 +2894,7 @@
           const { data, error } = await db.from('tasks')
             .update({
               completed_at: new Date().toISOString(),
-              completed_by: session.id,
-              assigned_to:  session.id,
-              open_to_kids: false
+              completed_by: session.id
             })
             .eq('id', taskId)
             .is('completed_at', null)
@@ -2929,33 +2947,34 @@
       }).eq('id', taskId);
 
       // 2. Add bank deposit if amount > 0
-      if (task.chore_amount > 0 && task.assigned_to) {
+      const payoutTo = task.completed_by || task.assigned_to;
+      if (task.chore_amount > 0 && payoutTo) {
         const amount = parseFloat(task.chore_amount);
 
         // Upsert bank balance
         const { data: bal } = await db.from('bank_balances')
-          .select('*').eq('family_member_id', task.assigned_to).single();
+          .select('*').eq('family_member_id', payoutTo).single();
 
         if (bal) {
           await db.from('bank_balances').update({
             balance:      parseFloat(bal.balance) + amount,
             total_earned: parseFloat(bal.total_earned) + amount,
             updated_at:   new Date().toISOString()
-          }).eq('family_member_id', task.assigned_to);
+          }).eq('family_member_id', payoutTo);
         }
 
         // Log transaction
         await db.from('bank_transactions').insert({
-          family_member_id: task.assigned_to,
+          family_member_id: payoutTo,
           amount,
           type:        'earned',
           description: `Chore: ${task.title}`,
           task_id:     task.id
         });
 
-        const name = memberName(task.assigned_to);
+        const name = memberName(payoutTo);
         showToast(`✓ Approved! $${amount.toFixed(2)} added to ${name}'s bank 💰`);
-        sendPush(task.assigned_to, 'Chore approved! 💰', `$${amount.toFixed(2)} added to your bank for "${task.title}"`, 'bank-deposit');
+        sendPush(payoutTo, 'Chore approved! 💰', `$${amount.toFixed(2)} added to your bank for "${task.title}"`, 'bank-deposit');
       } else {
         showToast('Chore approved ✓');
       }
@@ -3033,20 +3052,23 @@
 
       let tasks = allTasks.length > 0 ? allTasks : await fetchTasks();
 
-      // Items due today or overdue, incomplete — plus any open race chores for kids
+      // Items to show: all incomplete chores + tasks due within 3 days or overdue
+      const threeDaysOut = new Date();
+      threeDaysOut.setDate(threeDaysOut.getDate() + 3);
+
       let preview = tasks.filter(t => {
         if (t.completed_at) return false;
-        // Kids: include their own tasks/chores + open race chores
+        // Kids: only their own tasks/chores + open race chores
         if (session.role === 'kid') {
           const isOwn  = t.assigned_to === session.id;
           const isRace = t.open_to_kids === true;
           if (!isOwn && !isRace) return false;
         }
-        // Always include race chores (no due date needed)
-        if (t.open_to_kids) return true;
-        // Otherwise require a due date that is today or overdue
+        // All incomplete chores always shown
+        if (t.is_chore) return true;
+        // Tasks: only if due within 3 days or overdue
         if (!t.due_date) return false;
-        return new Date(t.due_date) <= new Date();
+        return new Date(t.due_date) <= threeDaysOut;
       });
 
       // For parents: pending approval chores at the top
