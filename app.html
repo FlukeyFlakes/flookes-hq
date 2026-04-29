@@ -3746,7 +3746,7 @@
       });
 
       if (error) {
-        console.error('Goal insert failed:', error);
+        console.error('Goal insert failed:', error.message, error.details, error.hint, error.code);
         showToast('Could not save goal — try again.');
         btn.disabled = false;
         btn.textContent = 'Add Goal';
