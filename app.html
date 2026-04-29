@@ -1880,6 +1880,61 @@
       background: none; border: none;
       color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 4px 8px;
     }
+
+    /* ── iPad two-column layout ── */
+    @media (min-width: 768px) {
+      .app-container {
+        max-width: 920px;
+        padding-left: 36px;
+        padding-right: 36px;
+      }
+
+      /* Home: two-column grid */
+      #section-home {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        column-gap: 20px;
+        align-items: start;
+      }
+
+      /* Full-width spans */
+      #section-home .greeting-card,
+      #section-home #push-banner {
+        grid-column: 1 / -1;
+      }
+
+      /* Left column: weather + calendar */
+      #section-home #weather-card,
+      #section-home #calendar-card {
+        grid-column: 1;
+      }
+
+      /* Right column: tasks + bank + dinner */
+      #section-home #home-tasks-card,
+      #section-home #home-bank-card,
+      #section-home #home-dinner-card {
+        grid-column: 2;
+      }
+
+      /* Bottom nav wider */
+      .bottom-nav {
+        max-width: 920px;
+        left: 50%;
+        transform: translateX(-50%);
+        border-radius: 24px 24px 0 0;
+      }
+
+      /* Sheets wider */
+      .add-sheet {
+        max-width: 520px;
+        left: 50%;
+        transform: translateX(-50%) translateY(100%);
+        border-radius: 24px 24px 0 0;
+      }
+      .add-sheet.open {
+        transform: translateX(-50%) translateY(0);
+      }
+    }
   </style>
 </head>
 <body>
