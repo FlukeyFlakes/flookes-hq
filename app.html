@@ -3507,11 +3507,23 @@
       const balance     = parseFloat(bal.balance     || 0);
       const totalEarned = parseFloat(bal.total_earned || 0);
 
-      // Auto-mark achieved goals
+      // Auto-mark achieved goals + fire 100% push
       const unachieved = goals.filter(g => !g.achieved_date && balance >= parseFloat(g.target_amount));
       for (const g of unachieved) {
         await db.from('savings_goals').update({ achieved_date: new Date().toISOString() }).eq('id', g.id);
         g.achieved_date = new Date().toISOString();
+        sendPush(bankKidId, '🎉 Goal reached!', `You saved up enough for "${g.title}"!`, `goal-100-${g.id}`);
+      }
+
+      // Fire 50% push once per goal (tracked in localStorage)
+      for (const g of goals.filter(g => !g.achieved_date)) {
+        const target   = parseFloat(g.target_amount);
+        const pct      = balance / target;
+        const lsKey    = `fhq_goal50_${g.id}`;
+        if (pct >= 0.5 && !localStorage.getItem(lsKey)) {
+          localStorage.setItem(lsKey, '1');
+          sendPush(bankKidId, '⭐ Halfway there!', `You're 50% of the way to "${g.title}"!`, `goal-50-${g.id}`);
+        }
       }
 
       // Build HTML
@@ -3746,7 +3758,7 @@
       });
 
       if (error) {
-        console.error('Goal insert failed:', error.message, error.details, error.hint, error.code);
+        console.error('Goal insert failed:', error);
         showToast('Could not save goal — try again.');
         btn.disabled = false;
         btn.textContent = 'Add Goal';
