@@ -2177,7 +2177,10 @@
     <div id="section-shop" class="page-section" style="display:none">
       <div class="page-header">
         <div class="page-header-title">Shopping List</div>
-        <div class="shop-regen-btn" id="shop-regen-btn" onclick="generateShoppingList(true)">↺ Refresh</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="shop-regen-btn" id="shop-dedupe-btn" onclick="dedupeShoppingList()" style="display:none">✨ Dedupe</div>
+          <div class="shop-regen-btn" id="shop-regen-btn" onclick="generateShoppingList(true)">↺ Refresh</div>
+        </div>
       </div>
       <div id="shop-panel-content">
         <div class="tasks-loading">
@@ -3995,6 +3998,10 @@
       document.getElementById('shop-panel-content').innerHTML =
         `<div class="tasks-loading"><span style="animation:pulse 2s ease-in-out infinite">🛒</span><span>Loading...</span></div>`;
 
+      // Show dedupe button for parents only
+      const dedupeBtn = document.getElementById('shop-dedupe-btn');
+      if (dedupeBtn) dedupeBtn.style.display = session.role === 'parent' ? '' : 'none';
+
       const weekStart = getMealWeekStartDate(0);
 
       // Check if list exists for this week
@@ -4176,6 +4183,72 @@
       closeAddSheet();
       showToast('Item added ✓');
       await renderShopPanel(weekStart);
+    }
+
+    async function dedupeShoppingList() {
+      if (session.role !== 'parent') return;
+
+      const btn = document.getElementById('shop-dedupe-btn');
+      if (btn) { btn.textContent = '⏳'; btn.style.pointerEvents = 'none'; }
+
+      try {
+        const weekStart = getMealWeekStartDate(0);
+
+        // Fetch all unchecked items for this week
+        const { data: items } = await db.from('shopping_list_items')
+          .select('id, name, store')
+          .eq('week_start_date', weekStart)
+          .eq('checked', false);
+
+        if (!items || items.length < 2) {
+          showToast('Nothing to deduplicate.');
+          return;
+        }
+
+        const res = await fetch(`${AI_WORKER}/dedupe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: items.map(i => ({ name: i.name, store: i.store || 'other' }))
+          })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        if (!data.items?.length) throw new Error('No consolidated list returned');
+
+        const originalIds = items.map(i => i.id);
+        const consolidated = data.items;
+
+        // Delete all unchecked items
+        await db.from('shopping_list_items')
+          .delete()
+          .in('id', originalIds);
+
+        // Insert consolidated list
+        await db.from('shopping_list_items').insert(
+          consolidated.map(i => ({
+            week_start_date: weekStart,
+            name: i.name,
+            store: i.store || 'other',
+            source: 'manual',
+            checked: false
+          }))
+        );
+
+        await renderShopPanel(weekStart);
+
+        const saved = items.length - consolidated.length;
+        showToast(saved > 0
+          ? `✨ Consolidated — removed ${saved} duplicate${saved !== 1 ? 's' : ''}`
+          : '✨ List looks clean already');
+
+      } catch(e) {
+        console.error('dedupeShoppingList error:', e);
+        showToast(e.message || 'Dedupe failed — try again');
+      } finally {
+        const btn = document.getElementById('shop-dedupe-btn');
+        if (btn) { btn.textContent = '✨ Dedupe'; btn.style.pointerEvents = ''; }
+      }
     }
 
     // ── Real-time ──
