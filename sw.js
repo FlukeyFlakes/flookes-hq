@@ -37,8 +37,8 @@ self.addEventListener('push', e => {
   e.waitUntil(
     self.registration.showNotification(data.title || 'Flookes HQ', {
       body:               data.body || '',
-      icon:               '/assets/icon-192.png',
-      badge:              '/assets/icon-192.png',
+      icon:               '/icon-192.png',
+      badge:              '/icon-192.png',
       tag:                data.tag  || 'flookes-hq',
       data:               { url: data.url || '/app.html' },
       requireInteraction: false,
