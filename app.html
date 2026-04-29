@@ -4446,6 +4446,14 @@
 
         populateImportedIngredients(data.ingredients);
 
+        // Fill in meal name if the field is empty
+        if (data.name) {
+          const nameField = document.getElementById('sheet-meal-name');
+          if (nameField && !nameField.value.trim()) {
+            nameField.value = data.name;
+          }
+        }
+
         // Collapse panel
         const panel = document.getElementById('recipe-import-panel');
         const toggle = document.getElementById('recipe-import-toggle');
