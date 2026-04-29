@@ -619,53 +619,57 @@
       text-align: center;
     }
 
-    /* Swipe row wrapper */
+    /* Swipe row wrapper — CSS Grid so card always covers background */
     .swipe-row {
-      position: relative;
+      display: grid;
+      grid-template-columns: 1fr;
       margin-bottom: 10px;
       border-radius: 16px;
       overflow: hidden;
       touch-action: pan-y;
     }
 
-    .swipe-reveal {
-      position: absolute;
-      top: 0; bottom: 0;
+    /* Single background div: orange left half, red right half */
+    .swipe-bg {
+      grid-area: 1 / 1;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       padding: 0 18px;
       font-size: 0.78rem;
       font-weight: 600;
       color: white;
-      z-index: 0;
       gap: 6px;
     }
-    .swipe-reveal-left {
-      left: 0;
-      background: #D97706;
-      border-radius: 16px 0 0 16px;
+    .swipe-bg.has-both {
+      background: linear-gradient(to right, #D97706 50%, #DC2626 50%);
     }
-    .swipe-reveal-right {
-      right: 0;
+    .swipe-bg.has-nudge {
+      background: #D97706;
+    }
+    .swipe-bg.has-delete {
       background: #DC2626;
-      border-radius: 0 16px 16px 0;
+      justify-content: flex-end;
     }
 
-    /* Task card */
+    /* Task card — same grid-area as bg, last in DOM so always on top */
     .task-card {
-      position: relative;
-      z-index: 1;
-      width: 100%;
-      isolation: isolate;
+      grid-area: 1 / 1;
       display: flex;
-      align-items: center;
-      gap: 11px;
+      flex-direction: column;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 13px 15px;
+      padding: 13px 15px 9px;
       transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
       -webkit-tap-highlight-color: transparent;
+    }
+
+    .task-card-main {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      width: 100%;
     }
 
     .task-card.state-pending {
@@ -892,7 +896,7 @@
     .swipe-hint {
       display: flex;
       justify-content: space-between;
-      margin-top: 5px;
+      margin-top: 7px;
       font-size: 0.6rem;
       letter-spacing: 0.06em;
       color: rgba(240,238,232,0.22);
@@ -2774,34 +2778,42 @@
                         (session.role === 'kid' && !task.is_chore && task.assigned_to === session.id);
       const canNudge  = session.role === 'parent';
 
-      const leftReveal  = canNudge
-        ? `<div class="swipe-reveal swipe-reveal-left">👋 Nudge</div>` : '';
-      const rightReveal = canDelete
-        ? `<div class="swipe-reveal swipe-reveal-right">🗑 Delete</div>` : '';
+      // Background div — gradient shows correct colour on each swipe direction
+      let bgClass = '';
+      if (canNudge && canDelete) bgClass = 'has-both';
+      else if (canNudge)  bgClass = 'has-nudge';
+      else if (canDelete) bgClass = 'has-delete';
+
+      const nudgeLabel  = canNudge  ? `<span>👋 Nudge</span>`  : `<span></span>`;
+      const deleteLabel = canDelete ? `<span>🗑 Delete</span>` : `<span></span>`;
+      const swipeBgHtml = bgClass
+        ? `<div class="swipe-bg ${bgClass}">${nudgeLabel}${deleteLabel}</div>` : '';
+
       // If neither action available, disable swipe entirely
       const swipeAttr = (!canNudge && !canDelete) ? 'data-swipe-disabled="true"' : '';
 
       const showHint = (canNudge || canDelete) && !isDone && !isPending;
-      const hintLeft  = canNudge  ? '👋 nudge' : '';
-      const hintRight = canDelete ? 'delete 🗑' : '';
+      const hintLeft  = canNudge  ? '← nudge' : '';
+      const hintRight = canDelete ? 'delete →' : '';
       const swipeHintHtml = showHint
         ? `<div class="swipe-hint"><span>${hintLeft}</span><span>${hintRight}</span></div>` : '';
 
       return `
         <div class="swipe-row" data-task-id="${task.id}" ${swipeAttr}>
-          ${leftReveal}
-          ${rightReveal}
+          ${swipeBgHtml}
           <div class="task-card ${cardState}">
-            <div class="task-check ${checkClass} ${checkOnClick ? 'interactive' : ''}" ${checkOnClick}>${checkIcon}</div>
-            <div class="priority-dot ${task.priority}"></div>
-            <div class="task-body">
-              <div class="task-title">${escHtml(task.title)}</div>
-              ${raceBadge ? `<div style="margin-top:4px">${raceBadge}</div>` : ''}
-              <div class="task-meta">${[assigneePart, duePart].filter(Boolean).join('<span style="margin:0 3px;opacity:0.3">·</span>')}</div>
+            <div class="task-card-main">
+              <div class="task-check ${checkClass} ${checkOnClick ? 'interactive' : ''}" ${checkOnClick}>${checkIcon}</div>
+              <div class="priority-dot ${task.priority}"></div>
+              <div class="task-body">
+                <div class="task-title">${escHtml(task.title)}</div>
+                ${raceBadge ? `<div style="margin-top:4px">${raceBadge}</div>` : ''}
+                <div class="task-meta">${[assigneePart, duePart].filter(Boolean).join('<span style="margin:0 3px;opacity:0.3">·</span>')}</div>
+              </div>
+              <div class="task-right">${rightHtml}</div>
             </div>
-            <div class="task-right">${rightHtml}</div>
+            ${swipeHintHtml}
           </div>
-          ${swipeHintHtml}
         </div>`;
     }
 
