@@ -4268,6 +4268,30 @@
 
       document.getElementById('sheet-body').innerHTML = `
         <div class="sheet-title">${DAY_FULL[dow]}</div>
+        <div class="recipe-import-btn" id="recipe-import-toggle" onclick="toggleImportPanel()">✨ Import from recipe</div>
+        <div class="recipe-import-panel" id="recipe-import-panel" style="display:none">
+          <div class="recipe-import-tabs">
+            <div class="recipe-import-tab active" onclick="setImportTab('url',this)">🔗 Link</div>
+            <div class="recipe-import-tab" onclick="setImportTab('text',this)">📋 Text</div>
+            <div class="recipe-import-tab" onclick="setImportTab('photo',this)">📸 Photo</div>
+          </div>
+          <div id="recipe-import-url-area">
+            <input type="url" class="sheet-input recipe-import-input" id="recipe-url-input"
+                   placeholder="https://..." autocomplete="off" autocorrect="off" autocapitalize="none">
+          </div>
+          <div id="recipe-import-text-area" style="display:none">
+            <textarea class="sheet-input recipe-import-input recipe-import-textarea"
+                      id="recipe-text-input" placeholder="Paste recipe text or caption here…"></textarea>
+          </div>
+          <div id="recipe-import-photo-area" style="display:none">
+            <div class="recipe-photo-drop" onclick="document.getElementById('recipe-photo-input').click()">
+              <span id="recipe-photo-label">📸 Tap to choose screenshot</span>
+            </div>
+            <input type="file" id="recipe-photo-input" accept="image/*" style="display:none"
+                   onchange="onPhotoSelected(this)">
+          </div>
+          <button class="recipe-extract-btn" id="recipe-extract-btn" onclick="runRecipeImport()">Extract Ingredients</button>
+        </div>
         <div class="sheet-field">
           <label class="sheet-label">Dinner</label>
           <div class="meal-name-wrap">
@@ -4280,30 +4304,6 @@
         </div>
         <div class="sheet-field">
           <label class="sheet-label">Ingredients <span style="opacity:0.45">(optional)</span></label>
-          <div class="recipe-import-btn" id="recipe-import-toggle" onclick="toggleImportPanel()">✨ Import from recipe</div>
-          <div class="recipe-import-panel" id="recipe-import-panel" style="display:none">
-            <div class="recipe-import-tabs">
-              <div class="recipe-import-tab active" onclick="setImportTab('url',this)">🔗 Link</div>
-              <div class="recipe-import-tab" onclick="setImportTab('text',this)">📋 Text</div>
-              <div class="recipe-import-tab" onclick="setImportTab('photo',this)">📸 Photo</div>
-            </div>
-            <div id="recipe-import-url-area">
-              <input type="url" class="sheet-input recipe-import-input" id="recipe-url-input"
-                     placeholder="https://..." autocomplete="off" autocorrect="off" autocapitalize="none">
-            </div>
-            <div id="recipe-import-text-area" style="display:none">
-              <textarea class="sheet-input recipe-import-input recipe-import-textarea"
-                        id="recipe-text-input" placeholder="Paste recipe text or caption here…"></textarea>
-            </div>
-            <div id="recipe-import-photo-area" style="display:none">
-              <div class="recipe-photo-drop" onclick="document.getElementById('recipe-photo-input').click()">
-                <span id="recipe-photo-label">📸 Tap to choose screenshot</span>
-              </div>
-              <input type="file" id="recipe-photo-input" accept="image/*" style="display:none"
-                     onchange="onPhotoSelected(this)">
-            </div>
-            <button class="recipe-extract-btn" id="recipe-extract-btn" onclick="runRecipeImport()">Extract Ingredients</button>
-          </div>
           <div class="meal-ing-list" id="meal-ing-list"></div>
           <div class="meal-add-ing-btn" onclick="addIngredientRow()">+ Add ingredient</div>
         </div>
