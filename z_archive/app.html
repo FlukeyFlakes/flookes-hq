@@ -2526,7 +2526,7 @@
       // Group by title + assigned_to
       const groups = {};
       for (const t of recurring) {
-        const key = `${t.title}|||${t.open_to_kids ? '__race__' : t.assigned_to}`;
+        const key = `${t.title}|||${t.assigned_to}`;
         if (!groups[key]) groups[key] = [];
         groups[key].push(t);
       }
