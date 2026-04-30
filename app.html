@@ -2,47 +2,132 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Chore Board - First One Wins</title>
-    <!-- Add your CSS and Supabase CDN links here -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Family Chore Board</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --bg: #f9fafb;
+            --card: #ffffff;
+            --text: #111827;
+        }
+        body { font-family: system-ui, sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .chore-card { background: var(--card); padding: 15px; border-radius: 8px; margin-bottom: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; }
+        .points { background: #e0e7ff; color: #4338ca; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        .btn:disabled { background: #9ca3af; }
+        .unassigned { border-left: 5px solid #fbbf24; }
+        .assigned { border-left: 5px solid #10b981; }
+    </style>
 </head>
 <body>
-    <div id="app">
-        <!-- Your UI Elements -->
+
+<div class="container">
+    <div class="header">
+        <h1>Chore Board</h1>
+        <button class="btn" onclick="loadData()">Refresh Board</button>
     </div>
+    
+    <div id="chore-list">
+        <!-- Chores will load here -->
+    </div>
+</div>
 
-    <script>
-        // ... (Your Supabase Config Init)
+<script>
+    // --- CONFIGURATION ---
+    // Make sure these match your Supabase Project Settings
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL_HERE';
+    const SUPABASE_KEY = 'YOUR_SUPABASE_ANON_KEY_HERE';
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-        async function loadTasks() {
-            const { data: tasks, error } = await supabase.from('tasks').select('*');
-            if (error) return console.error(error);
+    async function loadData() {
+        const choreList = document.getElementById('chore-list');
+        choreList.innerHTML = '<p>Checking for chores...</p>';
 
-            // Handle recurring spawns
-            const recurringTemplates = tasks.filter(t => t.is_recurring === true);
-            const today = new Date().toISOString().split('T')[0];
+        // 1. Fetch all tasks from Supabase
+        const { data: tasks, error } = await supabase
+            .from('tasks')
+            .select('*');
 
-            for (const template of recurringTemplates) {
-                // Check if a version for today already exists
-                const alreadyExists = tasks.some(t => t.title === template.title && t.due_date === today);
-
-                if (!alreadyExists) {
-                    // Create the fresh daily instance
-                    await supabase.from('tasks').insert([{
-                        title: template.title,
-                        points: template.points,
-                        is_recurring: true,
-                        assigned_to: null, // RESET TO POOL
-                        due_date: today,
-                        status: 'pending'
-                    }]);
-                }
-            }
-            renderTasks(tasks);
+        if (error) {
+            console.error('Error fetching tasks:', error);
+            return;
         }
 
-        // ... (Remaining Helper Functions)
-        
-        window.onload = loadTasks;
-    </script>
+        // 2. Identify Recurring Templates and the current Date
+        const today = new Date().toISOString().split('T')[0];
+        const templates = tasks.filter(t => t.is_recurring === true);
+
+        // 3. Logic: SPAWN NEW CHORES (The Fix)
+        // This checks if a "First One Wins" version exists for today.
+        // If not, it creates a brand new one with NO ASSIGNED USER.
+        for (const template of templates) {
+            const hasTaskToday = tasks.some(t => t.title === template.title && t.due_date === today);
+            
+            if (!hasTaskToday) {
+                await supabase.from('tasks').insert([{
+                    title: template.title,
+                    points: template.points,
+                    is_recurring: true,
+                    assigned_to: null, // CRITICAL: This ensures it resets to "First One Wins"
+                    due_date: today,
+                    status: 'pending'
+                }]);
+            }
+        }
+
+        // 4. Re-fetch and Render the List
+        const { data: updatedTasks } = await supabase.from('tasks').select('*').eq('due_date', today);
+        renderChores(updatedTasks);
+    }
+
+    function renderChores(tasks) {
+        const choreList = document.getElementById('chore-list');
+        choreList.innerHTML = '';
+
+        if (tasks.length === 0) {
+            choreList.innerHTML = '<p>No chores for today! Relax!</p>';
+            return;
+        }
+
+        tasks.forEach(task => {
+            const isAssigned = task.assigned_to !== null;
+            const card = document.createElement('div');
+            card.className = `chore-card ${isAssigned ? 'assigned' : 'unassigned'}`;
+            
+            card.innerHTML = `
+                <div>
+                    <strong>${task.title}</strong>
+                    <div class="points">${task.points} pts</div>
+                    <small>${isAssigned ? 'Claimed' : 'First One Wins!'}</small>
+                </div>
+                <button class="btn" 
+                    ${isAssigned ? 'disabled' : ''} 
+                    onclick="claimChore('${task.id}')">
+                    ${isAssigned ? 'Taken' : 'Claim'}
+                </button>
+            `;
+            choreList.appendChild(card);
+        });
+    }
+
+    async function claimChore(taskId) {
+        // In a real scenario, you'd pass the Logged In User's ID here
+        // For this example, we are just marking it as "Claimed"
+        const { error } = await supabase
+            .from('tasks')
+            .update({ status: 'claimed' }) 
+            .eq('id', taskId);
+
+        if (!error) loadData();
+    }
+
+    // Initial load
+    loadData();
+</script>
+
 </body>
 </html>
