@@ -2450,7 +2450,10 @@
 
     function handleFabClick() {
       if (currentTab === 'tasks') openAddSheet();
-      else if (currentTab === 'bank') openAddGoalSheet();
+      else if (currentTab === 'bank') {
+        if (session.name === 'Jonathan') openBankActionSheet();
+        else openAddGoalSheet();
+      }
       else if (currentTab === 'shop') openAddShopItemSheet();
     }
 
@@ -3712,15 +3715,15 @@
       const totalEarned = parseFloat(bal.total_earned || 0);
 
       // Auto-mark achieved goals + fire 100% push
-      const unachieved = goals.filter(g => !g.achieved_date && balance >= parseFloat(g.target_amount));
+      const unachieved = goals.filter(g => !g.achieved_at && balance >= parseFloat(g.target_amount));
       for (const g of unachieved) {
-        await db.from('savings_goals').update({ achieved_date: new Date().toISOString() }).eq('id', g.id);
-        g.achieved_date = new Date().toISOString();
+        await db.from('savings_goals').update({ achieved_at: new Date().toISOString() }).eq('id', g.id);
+        g.achieved_at = new Date().toISOString();
         sendPush(bankKidId, '🎉 Goal reached!', `You saved up enough for "${g.title}"!`, `goal-100-${g.id}`);
       }
 
       // Fire 50% push once per goal (tracked in localStorage)
-      for (const g of goals.filter(g => !g.achieved_date)) {
+      for (const g of goals.filter(g => !g.achieved_at)) {
         const target   = parseFloat(g.target_amount);
         const pct      = balance / target;
         const lsKey    = `fhq_goal50_${g.id}`;
@@ -3760,8 +3763,8 @@
         </div>`;
 
       // Savings Goals section
-      const activeGoals   = goals.filter(g => !g.achieved_date);
-      const achievedGoals = goals.filter(g => !!g.achieved_date);
+      const activeGoals   = goals.filter(g => !g.achieved_at);
+      const achievedGoals = goals.filter(g => !!g.achieved_at);
       const sortedGoals   = [...activeGoals, ...achievedGoals];
 
       html += `
@@ -3777,7 +3780,7 @@
         sortedGoals.forEach(g => {
           const target   = parseFloat(g.target_amount);
           const progress = Math.min(100, Math.round((balance / target) * 100));
-          const isAchieved = !!g.achieved_date;
+          const isAchieved = !!g.achieved_at;
           html += `
             <div class="goal-card${isAchieved ? ' goal-achieved' : ''}">
               <div class="goal-card-top">
@@ -3838,7 +3841,153 @@
       await renderBankPanel();
     }
 
-    // ── Payout sheet ──
+    // ── Bank action choice sheet (Jonathan only) ──
+    function openBankActionSheet() {
+      const kids = bankKids();
+      const kid = familyMembers.find(m => m.id === bankKidId) || kids[0];
+      if (!kid) return;
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">Bank Actions</div>
+        <div style="font-size:0.85rem;color:var(--text-muted);margin:-14px 0 24px">
+          ${kid.emoji} ${kid.name}
+        </div>
+
+        <div onclick="closeAddSheet(); setTimeout(() => openDepositSheet('${kid.id}'), 180)"
+             style="display:flex;align-items:center;gap:16px;background:rgba(34,197,94,0.07);
+                    border:1px solid rgba(34,197,94,0.25);border-radius:16px;padding:18px 20px;
+                    margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+          <span style="font-size:1.8rem">💵</span>
+          <div>
+            <div style="font-size:0.95rem;font-weight:600;color:#22C55E">Add Money</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Deposit funds directly to a kid's account</div>
+          </div>
+        </div>
+
+        <div onclick="closeAddSheet(); setTimeout(() => openPayoutSheet('${kid.id}'), 180)"
+             style="display:flex;align-items:center;gap:16px;background:rgba(255,255,255,0.04);
+                    border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 20px;
+                    margin-bottom:12px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+          <span style="font-size:1.8rem">💸</span>
+          <div>
+            <div style="font-size:0.95rem;font-weight:600;color:var(--text)">Record Payout</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Mark cash already paid out to a kid</div>
+          </div>
+        </div>
+
+        <div onclick="closeAddSheet(); setTimeout(() => openAddGoalSheet('${kid.id}'), 180)"
+             style="display:flex;align-items:center;gap:16px;background:rgba(255,255,255,0.04);
+                    border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px 20px;
+                    margin-bottom:4px;cursor:pointer;-webkit-tap-highlight-color:transparent;">
+          <span style="font-size:1.8rem">🎯</span>
+          <div>
+            <div style="font-size:0.95rem;font-weight:600;color:var(--text)">Add Savings Goal</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);margin-top:2px">Set a new savings target for a kid</div>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+    }
+
+    // ── Deposit sheet (Jonathan only) ──
+    function openDepositSheet(kidId) {
+      bankSheetMode  = 'deposit';
+      bankSheetKidId = kidId || bankKidId;
+      const kids = bankKids();
+      const kid  = familyMembers.find(m => m.id === bankSheetKidId) || kids[0];
+
+      // Build kid selector pills if there are multiple kids
+      const kidSelectorHTML = kids.length > 1 ? `
+        <div class="sheet-field">
+          <label class="sheet-label">For</label>
+          <div class="pill-row" id="deposit-kid-pills">
+            ${kids.map(k => `
+              <div class="sel-pill${k.id === bankSheetKidId ? ' active' : ''}"
+                   onclick="selectDepositKid('${k.id}')" id="deposit-pill-${k.id}">
+                ${k.emoji} ${k.name}
+              </div>`).join('')}
+          </div>
+        </div>` : `
+        <div style="font-size:0.85rem;color:var(--text-muted);margin:-14px 0 20px">
+          ${kid ? `${kid.emoji} ${kid.name}` : ''}
+        </div>`;
+
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">Add Money</div>
+        ${kidSelectorHTML}
+        <div class="sheet-field">
+          <label class="sheet-label">Amount</label>
+          <div class="amount-input-wrap">
+            <span class="amount-prefix">$</span>
+            <input type="number" class="sheet-input" id="bank-deposit-amount"
+                   placeholder="0.00" min="0.01" step="0.01">
+          </div>
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">Note <span style="opacity:0.45">(optional)</span></label>
+          <input type="text" class="sheet-input" id="bank-deposit-note"
+                 placeholder="e.g. Birthday money, allowance…" maxlength="80">
+        </div>
+        <button class="sheet-save-btn" onclick="submitDeposit()">Add Money</button>
+      `;
+
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById('bank-deposit-amount')?.focus(), 420);
+    }
+
+    function selectDepositKid(kidId) {
+      bankSheetKidId = kidId;
+      document.querySelectorAll('#deposit-kid-pills .sel-pill').forEach(p => p.classList.remove('active'));
+      document.getElementById(`deposit-pill-${kidId}`)?.classList.add('active');
+    }
+
+    async function submitDeposit() {
+      const amtStr = (document.getElementById('bank-deposit-amount')?.value || '').trim();
+      const amount = parseFloat(amtStr);
+      if (!amount || amount <= 0) {
+        showToast('Enter a valid amount.');
+        return;
+      }
+
+      const note = (document.getElementById('bank-deposit-note')?.value || '').trim();
+      const btn  = document.querySelector('.sheet-save-btn');
+      btn.disabled = true;
+      btn.textContent = 'Saving…';
+
+      const kidId = bankSheetKidId;
+
+      // Get current balance
+      const { data: bal } = await db.from('bank_balances')
+        .select('*').eq('family_member_id', kidId).single();
+
+      if (bal) {
+        const newBalance     = parseFloat(bal.balance)      + amount;
+        const newTotalEarned = parseFloat(bal.total_earned) + amount;
+        await db.from('bank_balances').update({
+          balance:      newBalance,
+          total_earned: newTotalEarned,
+          updated_at:   new Date().toISOString()
+        }).eq('family_member_id', kidId);
+      }
+
+      await db.from('bank_transactions').insert({
+        family_member_id: kidId,
+        amount,
+        type:        'earned',
+        description: note || `Deposit — ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      });
+
+      const kid = familyMembers.find(m => m.id === kidId);
+      // Switch bank view to the kid who just received money
+      bankKidId = kidId;
+      closeAddSheet();
+      showToast(`💵 $${amount.toFixed(2)} added to ${kid?.name || 'kid'}'s account`);
+      await renderBankPanel();
+      await updateHomeBankPreview();
+    }
     function openPayoutSheet(kidId) {
       bankSheetMode  = 'payout';
       bankSheetKidId = kidId;
@@ -5202,7 +5351,7 @@
       } catch (_) {}
     }
     function notifyParents(title, body, tag) {
-      allFamilyMembers.filter(m => m.role === 'parent').forEach(p => sendPush(p.id, title, body, tag));
+      familyMembers.filter(m => m.role === 'parent').forEach(p => sendPush(p.id, title, body, tag));
     }
 
     // ════════════════════════════════════════════════
