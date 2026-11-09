@@ -1,6 +1,8 @@
 // sw.js — Flookes HQ Service Worker
-const CACHE    = 'flookes-hq-v2';
-const PRECACHE = ['/', '/index.html', '/app.html', '/manifest.json'];
+// Pages are network-first so a new version of the app shows up right away; the cached
+// copy is only used when the phone is offline. /api/ is never cached.
+const CACHE    = 'flookes-hq-v3';
+const PRECACHE = ['/index.html', '/app.html', '/db.js', '/manifest.json', '/icon-192.png', '/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(PRECACHE)));
@@ -18,16 +20,19 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // Network-first for API / dynamic calls
-  if (url.hostname.includes('supabase.co') ||
-      url.hostname.includes('workers.dev') ||
-      url.hostname.includes('googleapis.com') ||
-      url.hostname.includes('open-meteo.com')) {
-    e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
-    return;
-  }
-  // Cache-first for static assets
-  e.respondWith(caches.match(e.request).then(cached => cached || fetch(e.request)));
+  if (e.request.method !== 'GET') return;
+  // API calls and other sites (weather, fonts): straight to the network.
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  // Pages and scripts: network first, cached copy when offline.
+  e.respondWith(
+    fetch(e.request).then(res => {
+      if (res.ok && !res.redirected) {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+      }
+      return res;
+    }).catch(() => caches.match(e.request).then(r => r || caches.match('/index.html')))
+  );
 });
 
 // ── Push notifications ────────────────────────────────────────
@@ -48,11 +53,11 @@ self.addEventListener('push', e => {
 
 self.addEventListener('notificationclick', e => {
   e.notification.close();
-  const target = 'https://family.flookesitup.com' + (e.notification.data?.url || '/app.html');
+  const target = self.location.origin + (e.notification.data?.url || '/app.html');
   e.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
       for (const c of list) {
-        if (c.url.startsWith('https://family.flookesitup.com') && 'focus' in c) return c.focus();
+        if (c.url.startsWith(self.location.origin) && 'focus' in c) return c.focus();
       }
       return clients.openWindow(target);
     })

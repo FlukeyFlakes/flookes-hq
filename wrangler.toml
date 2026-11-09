@@ -1,0 +1,33 @@
+name = "flookes-hq"
+main = "src/worker.js"
+compatibility_date = "2026-06-01"
+
+# family.flookesitup.com is added here at switch-over (DNS is on Cloudflare, so
+# deploying creates the record). Until then the app is at flookes-hq.flookes.workers.dev.
+workers_dev = true
+
+# The app's pages. Every request goes through the Worker first so security headers
+# are added and /api/* is checked for sign-in. html_handling = "none" keeps
+# /app.html and /index.html at their real addresses (the service worker caches them).
+[assets]
+directory = "./public"
+binding = "ASSETS"
+run_worker_first = true
+html_handling = "none"
+
+# Everything: family, tasks, bank, meals, shopping list, push subscriptions, sign-ins
+[[d1_databases]]
+binding = "DB"
+database_name = "flookes-hq"
+database_id = "9bbb9265-9c6d-4079-b395-9d5291fcdf48"
+
+[observability]
+enabled = true
+
+# Secrets — set in the Cloudflare dashboard (Worker → Settings → Variables and Secrets),
+# never in this file:
+#   ANTHROPIC_API_KEY     – recipe import, meal suggestions, shopping list clean-up
+#   GOOGLE_CLIENT_ID      – family Google Calendar
+#   GOOGLE_CLIENT_SECRET
+#   GOOGLE_REFRESH_TOKEN
+# Push notification keys are created by the Worker itself and kept in D1.

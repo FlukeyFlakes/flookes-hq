@@ -500,63 +500,20 @@
 
   <div class="login-footer">Napa, CA · Flookes HQ</div>
 
-  <!-- SHA-256 (works on HTTP and HTTPS) -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/js-sha256/0.9.0/sha256.min.js"></script>
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="/db.js"></script>
 
   <script>
-    // ── Config ──────────────────────────────────────────────
-    const SUPABASE_URL = 'https://nwrvgjfnetuaohxzmsuv.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_TMqE0djUkHy9F1J_ye2Ytg_QebA9bTL';
-    const MAX_ATTEMPTS = 3;
-    const LOCKOUT_MINUTES = 5;
-
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    // Sign-in is checked by the Worker (/api/login). It sets a secure cookie that keeps
+    // this phone signed in for 90 days; 8 wrong PINs locks a tile for 15 minutes.
 
     // ── State ────────────────────────────────────────────────
     let members = [];
     let selectedMember = null;
     let pinBuffer = '';
-    let attempts = 0;
+    const lockedUntil = {};   // member id → time (ms) the server said the tile unlocks
 
-    // ── Utility ──────────────────────────────────────────────
-    function hashPIN(text) {
-      // Uses js-sha256 CDN library — works on HTTP and HTTPS
-      return sha256(text);
-    }
-
-    function getLockoutKey(id) { return `fhq_lockout_${id}`; }
-    function getAttemptsKey(id) { return `fhq_attempts_${id}`; }
-
-    function isLockedOut(id) {
-      const until = localStorage.getItem(getLockoutKey(id));
-      if (!until) return false;
-      if (Date.now() < parseInt(until)) return true;
-      localStorage.removeItem(getLockoutKey(id));
-      localStorage.removeItem(getAttemptsKey(id));
-      return false;
-    }
-
-    function lockoutRemaining(id) {
-      const until = parseInt(localStorage.getItem(getLockoutKey(id)) || '0');
-      return Math.max(0, Math.ceil((until - Date.now()) / 60000));
-    }
-
-    function recordFailedAttempt(id) {
-      const key = getAttemptsKey(id);
-      const current = parseInt(localStorage.getItem(key) || '0') + 1;
-      localStorage.setItem(key, current);
-      if (current >= MAX_ATTEMPTS) {
-        localStorage.setItem(getLockoutKey(id), Date.now() + LOCKOUT_MINUTES * 60 * 1000);
-      }
-      return current;
-    }
-
-    function clearAttempts(id) {
-      localStorage.removeItem(getAttemptsKey(id));
-      localStorage.removeItem(getLockoutKey(id));
-    }
+    function isLockedOut(id) { return (lockedUntil[id] || 0) > Date.now(); }
+    function lockoutRemaining(id) { return Math.max(1, Math.ceil(((lockedUntil[id] || 0) - Date.now()) / 60000)); }
 
     // ── Date/time display ────────────────────────────────────
     function updateDateTime() {
@@ -590,7 +547,6 @@
     function openPinModal(member) {
       selectedMember = member;
       pinBuffer = '';
-      attempts = parseInt(localStorage.getItem(getAttemptsKey(member.id)) || '0');
 
       document.getElementById('modal-emoji').textContent = member.emoji;
       document.getElementById('modal-name').textContent = member.name;
@@ -690,45 +646,41 @@
     }
 
     async function verifyPin() {
-      const hash = hashPIN(pinBuffer);
-
+      const member = selectedMember;
       try {
-        const { data, error } = await db
-          .from('family_members')
-          .select('*')
-          .eq('id', selectedMember.id)
-          .eq('pin_hash', hash)
-          .single();
+        const res = await fetchWithTimeout('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: member.id, pin: pinBuffer }),
+        });
+        const data = await res.json().catch(() => ({}));
 
-        if (error || !data) {
-          const att = recordFailedAttempt(selectedMember.id);
-          const remaining = MAX_ATTEMPTS - att;
-          if (remaining <= 0) {
-            showLockout();
-          } else {
-            showError(`Incorrect PIN · ${remaining} attempt${remaining !== 1 ? 's' : ''} left`);
-          }
+        if (res.status === 429) {
+          lockedUntil[member.id] = Date.now() + (data.minutes || 15) * 60000;
+          pinBuffer = '';
+          showLockout();
+          return;
+        }
+        if (!res.ok) {
+          const left = data.attemptsLeft;
+          showError(left != null
+            ? `Incorrect PIN · ${left} attempt${left !== 1 ? 's' : ''} left`
+            : 'Something went wrong. Try again.');
           return;
         }
 
-        // Success!
-        clearAttempts(selectedMember.id);
-        const session = {
-          id: data.id,
-          name: data.name,
-          role: data.role,
-          emoji: data.emoji,
-          color_primary: data.color_primary,
-          color_secondary: data.color_secondary,
-          color_tertiary: data.color_tertiary,
-          loginTime: Date.now()
-        };
-        localStorage.setItem('fhq_session', JSON.stringify(session));
+        // Success — the cookie is set; keep the profile for the app's greeting and colours.
+        localStorage.setItem('fhq_session', JSON.stringify({ ...data, loginTime: Date.now() }));
         window.location.href = 'app.html';
-
       } catch (e) {
         showError('Connection error. Try again.');
       }
+    }
+
+    function fetchWithTimeout(url, opts = {}, ms = 15000) {
+      const c = new AbortController();
+      const t = setTimeout(() => c.abort(), ms);
+      return fetch(url, { ...opts, credentials: 'same-origin', signal: c.signal }).finally(() => clearTimeout(t));
     }
 
     // ── Numpad event listeners ───────────────────────────────
@@ -741,31 +693,27 @@
 
     // ── Load family members & boot ───────────────────────────
     async function boot() {
-      // Already logged in?
-      const session = localStorage.getItem('fhq_session');
-      if (session) {
+      // Already signed in on this phone? Ask the server rather than trusting local storage.
+      if (localStorage.getItem('fhq_session')) {
         try {
-          const s = JSON.parse(session);
-          // Session valid for 12 hours
-          if (Date.now() - s.loginTime < 12 * 60 * 60 * 1000) {
+          const res = await fetchWithTimeout('/api/me');
+          if (res.ok) {
+            const me = await res.json();
+            localStorage.setItem('fhq_session', JSON.stringify({ ...me, loginTime: Date.now() }));
             window.location.href = 'app.html';
             return;
           }
-        } catch(e) { localStorage.removeItem('fhq_session'); }
+        } catch (_) {}
+        localStorage.removeItem('fhq_session');
       }
 
       try {
-        const { data, error } = await db
-          .from('family_members')
-          .select('*')
-          .order('display_order');
-
-        if (error) throw error;
-        members = data;
+        const res = await fetchWithTimeout('/api/members');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        members = await res.json();
         renderCards(members);
       } catch (e) {
         console.error('Failed to load family members:', e);
-        // Show fallback message
         document.getElementById('profile-grid').innerHTML =
           '<p style="color:var(--text-muted);text-align:center;grid-column:span 2;font-size:0.85rem">Unable to connect.<br>Check your internet connection.</p>';
       }

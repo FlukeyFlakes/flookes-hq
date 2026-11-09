@@ -2045,10 +2045,10 @@
     <!-- ── Always-visible Top Bar ── -->
     <div class="top-bar">
       <div class="app-logo">Flookes <span>HQ</span></div>
-      <div class="user-pill" id="user-pill" onclick="signOut()">
+      <div class="user-pill" id="user-pill" onclick="openAccountSheet()">
         <span class="user-emoji" id="user-emoji">👤</span>
         <span id="user-name">Loading...</span>
-        <span style="color:var(--text-muted);font-size:0.7rem">· Sign out</span>
+        <span style="color:var(--text-muted);font-size:0.7rem">· Account</span>
       </div>
     </div>
 
@@ -2263,21 +2263,17 @@
   <!-- ── Toast ── -->
   <div class="toast" id="toast"><span id="toast-text"></span><button class="toast-undo-btn" id="toast-undo-btn" onclick="doToastUndo()">Undo</button></div>
 
-  <!-- Supabase -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Database client: talks to this site's Worker (/api/db) -->
+  <script src="/db.js"></script>
 
   <script>
     // ════════════════════════════════════════════════
     //  CONFIG
     // ════════════════════════════════════════════════
-    const SUPABASE_URL = 'https://nwrvgjfnetuaohxzmsuv.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_TMqE0djUkHy9F1J_ye2Ytg_QebA9bTL';
-    const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
-    const WORKER_URL    = 'https://flookes-calendar.flookes.workers.dev';
-    const PUSH_WORKER   = 'https://flookes-hq-push.flookes.workers.dev';
-    const AI_WORKER     = 'https://flookes-ai.flookes.workers.dev';
-    const VAPID_PUB_KEY = 'BCd2GAaRgwgXDVePLAf8QKpyoVhR7u2zV3fve12UD4XeV96uNSRCKxmoM99QEIWQnZGXOiYlwyC-q4VH2GwHQdM';
+    // Everything goes through this site's own Worker; sign-in is a secure cookie.
+    const WORKER_URL    = '/api/calendar';
+    const PUSH_WORKER   = '/api/push';
+    const AI_WORKER     = '/api/ai';
     const WEATHER_LAT = 38.2975;
     const WEATHER_LON = -122.2869;
     const HOURLY_TIMES  = [8, 12, 17, 20];
@@ -2294,7 +2290,7 @@
     let familyMembers = [];       // all 4 members
     let allTasks      = [];       // cached tasks
     let activeFilter  = 'all';   // 'all' | member UUID
-    let tasksRealtime = null;    // supabase channel
+    let tasksRealtime = null;    // change-polling channel
     let sheetIsChore  = false;   // add sheet state
     let sheetPriority = 'medium';
     let sheetAssignTo = null;    // UUID
@@ -2325,15 +2321,92 @@
         const raw = localStorage.getItem('fhq_session');
         if (!raw) { window.location.href = 'index.html'; return; }
         session = JSON.parse(raw);
-        if (Date.now() - session.loginTime > 12 * 60 * 60 * 1000) { signOut(); return; }
         applyTheme();
         applyGreeting();
+        // The server has the final say: if this phone's sign-in has ended, go to the PIN screen.
+        fhqApi('/api/me').then(r => r.ok ? r.json() : null).then(me => {
+          if (me) localStorage.setItem('fhq_session', JSON.stringify({ ...session, ...me }));
+        }).catch(() => {});
       } catch(e) { signOut(); }
     }
 
-    function signOut() {
+    async function signOut() {
+      try { await fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }); } catch (_) {}
       localStorage.removeItem('fhq_session');
       window.location.href = 'index.html';
+    }
+
+    // ════════════════════════════════════════════════
+    //  ACCOUNT — change PIN, reset a kid's PIN, sign out
+    // ════════════════════════════════════════════════
+    function openAccountSheet() {
+      const kids = familyMembers.filter(m => m.role === 'kid');
+      const resetHtml = session.role === 'parent' && kids.length ? `
+        <div class="sheet-field" style="margin-top:22px">
+          <label class="sheet-label">Reset a kid's PIN</label>
+          <div class="pill-row" id="pin-reset-kids">
+            ${kids.map(k => `<div class="sel-pill" onclick="openPinSheet('${k.id}')">${k.emoji} ${escapeAttr(k.name)}</div>`).join('')}
+          </div>
+        </div>` : '';
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">${session.emoji || ''} ${escapeAttr(session.name || '')}</div>
+        <button class="sheet-save-btn" type="button" onclick="openPinSheet()">Change my PIN</button>
+        ${resetHtml}
+        <button class="sheet-save-btn" type="button" style="margin-top:22px;background:transparent;border:1px solid rgba(255,255,255,0.15);color:var(--text-muted)" onclick="signOut()">Sign out</button>
+      `;
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+    }
+
+    function escapeAttr(s) {
+      return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+    }
+
+    function openPinSheet(kidId) {
+      const kid = kidId ? familyMembers.find(m => m.id === kidId) : null;
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">${kid ? `Reset ${kid.emoji} ${escapeAttr(kid.name)}'s PIN` : 'Change my PIN'}</div>
+        ${kid ? '' : `
+        <div class="sheet-field">
+          <label class="sheet-label">Current PIN</label>
+          <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sheet-input" id="pin-current" autocomplete="current-password">
+        </div>`}
+        <div class="sheet-field">
+          <label class="sheet-label">New PIN (4 digits)</label>
+          <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sheet-input" id="pin-new" autocomplete="new-password">
+        </div>
+        <div class="sheet-field">
+          <label class="sheet-label">New PIN again</label>
+          <input type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" class="sheet-input" id="pin-new2" autocomplete="new-password">
+        </div>
+        <button class="sheet-save-btn" type="button" onclick="submitPinChange(${kid ? `'${kid.id}'` : 'null'})">Save PIN</button>
+      `;
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+      setTimeout(() => document.getElementById(kid ? 'pin-new' : 'pin-current')?.focus(), 420);
+    }
+
+    async function submitPinChange(kidId) {
+      const current = document.getElementById('pin-current')?.value || '';
+      const next    = document.getElementById('pin-new').value;
+      const again   = document.getElementById('pin-new2').value;
+      if (!/^\d{4}$/.test(next)) { showToast('PINs are 4 digits.'); return; }
+      if (next !== again)         { showToast("The new PINs don't match."); return; }
+      const btn = document.querySelector('.sheet-save-btn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const res = await fhqApi('/api/pin', {
+          method: 'POST',
+          body: JSON.stringify(kidId ? { member_id: kidId, new_pin: next } : { current_pin: current, new_pin: next }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { showToast(data.error || 'Could not change the PIN.'); btn.disabled = false; btn.textContent = 'Save PIN'; return; }
+        closeAddSheet();
+        showToast(kidId ? 'PIN reset ✅' : 'PIN changed ✅');
+      } catch (e) {
+        showToast('Connection error. Try again.');
+        btn.disabled = false; btn.textContent = 'Save PIN';
+      }
     }
 
     // ════════════════════════════════════════════════
@@ -5288,8 +5361,8 @@
     //  PUSH NOTIFICATIONS
     // ════════════════════════════════════════════════
     function showPushBanner() {
-      if (localStorage.getItem('fhq_push_dismissed')) return;
-      if (localStorage.getItem('fhq_push_subscribed')) return;
+      if (localStorage.getItem('fhq_push_dismissed_v2')) return;
+      if (localStorage.getItem('fhq_push_subscribed_v2')) return;
       if (!('Notification' in window)) return;
       if (Notification.permission === 'denied') return;
       const el = document.getElementById('push-banner');
@@ -5300,7 +5373,7 @@
       if (el) el.style.display = 'none';
     }
     function dismissPushBanner() {
-      localStorage.setItem('fhq_push_dismissed', '1');
+      localStorage.setItem('fhq_push_dismissed_v2', '1');
       hidePushBanner();
     }
     function urlB64ToUint8Array(b64) {
@@ -5320,20 +5393,23 @@
         const permission = await Notification.requestPermission();
         if (permission !== 'granted') { dismissPushBanner(); return; }
         const reg = await navigator.serviceWorker.ready;
+        const { publicKey } = await (await fhqApi(PUSH_WORKER + '/key')).json();
+        // A phone subscribed under the old (Supabase) push keys must re-subscribe.
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) await existing.unsubscribe();
         const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: urlB64ToUint8Array(VAPID_PUB_KEY),
+          applicationServerKey: urlB64ToUint8Array(publicKey),
         });
-        await fetch(PUSH_WORKER + '/subscribe', {
+        const saved = await fhqApi(PUSH_WORKER + '/subscribe', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            family_member_id: session.id,
-            subscription:     sub.toJSON(),
-            device_info:      navigator.userAgent.substring(0, 200),
+            subscription: sub.toJSON(),
+            device_info:  navigator.userAgent.substring(0, 200),
           }),
         });
-        localStorage.setItem('fhq_push_subscribed', '1');
+        if (!saved.ok) throw new Error('subscribe failed ' + saved.status);
+        localStorage.setItem('fhq_push_subscribed_v2', '1');
         hidePushBanner();
         showToast('Notifications on 🔔');
       } catch (e) {
