@@ -2,9 +2,16 @@ name = "flookes-hq"
 main = "src/worker.js"
 compatibility_date = "2026-06-01"
 
-# family.flookesitup.com is added here at switch-over (DNS is on Cloudflare, so
-# deploying creates the record). Until then the app is at flookes-hq.flookes.workers.dev.
+# The app lives at family.flookesitup.com (DNS is on Cloudflare; deploying keeps the record).
 workers_dev = true
+routes = [
+  { pattern = "family.flookesitup.com", custom_domain = true }
+]
+
+# One hourly job; the Worker picks what to run by Pacific time (7 AM weather, due-today
+# and payout checks; Sunday 10 AM meal-plan reminder), each once a day.
+[triggers]
+crons = ["0 * * * *"]
 
 # The app's pages. Every request goes through the Worker first so security headers
 # are added and /api/* is checked for sign-in. html_handling = "none" keeps
