@@ -749,9 +749,11 @@
     .task-right {
       flex-shrink: 0;
       display: flex;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 6px;
     }
+    .task-right .btn-row { display: flex; gap: 6px; }
 
     .chore-amount {
       font-family: 'Cormorant Garamond', serif;
@@ -1071,6 +1073,93 @@
       flex-wrap: wrap;
     }
 
+
+    /* ── Chores v2 ── */
+    .reject-btn {
+      background: rgba(239,68,68,0.10);
+      border: 1px solid rgba(239,68,68,0.35);
+      color: #EF4444;
+      border-radius: 100px;
+      padding: 5px 10px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .reject-note {
+      margin-top: 4px;
+      font-size: 0.72rem;
+      color: #F97316;
+    }
+    .repeat-chores-btn {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 16px;
+      margin-bottom: 18px;
+      border-radius: 14px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      font-size: 0.85rem;
+      color: var(--text);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .repeat-chores-btn span { opacity: 0.5; font-size: 1.1rem; }
+    .day-row { display: flex; gap: 6px; }
+    .day-btn {
+      flex: 1;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .day-btn.active {
+      background: rgba(var(--user-rgb), 0.15);
+      border-color: rgba(var(--user-rgb), 0.5);
+      color: var(--user-color);
+    }
+    .schedule-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .schedule-row.paused { opacity: 0.55; }
+    .schedule-main { flex: 1; min-width: 0; cursor: pointer; }
+    .schedule-title { font-size: 0.92rem; color: var(--text); }
+    .schedule-meta { font-size: 0.72rem; color: var(--text-muted); margin-top: 3px; }
+    .schedule-amount { font-size: 0.85rem; color: var(--user-color); }
+    .schedule-pause {
+      width: 34px; height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .paused-badge {
+      font-size: 0.65rem;
+      padding: 2px 7px;
+      border-radius: 100px;
+      background: rgba(255,255,255,0.08);
+      color: var(--text-muted);
+      margin-left: 4px;
+    }
+    .bank-missed {
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: #F97316;
+    }
     .sel-pill {
       padding: 8px 15px;
       border-radius: 100px;
@@ -2296,6 +2385,10 @@
     let sheetAssignTo = null;    // UUID
     let sheetRecurrence = 'none';
     let sheetRaceMode = false;
+    let sheetWho      = 'kid';     // chores: 'kid' | 'each' | 'grab'
+    let sheetRepeats  = false;     // chores: repeating?
+    let sheetDays     = new Set(); // repeating: weekday numbers, 0 = Sunday
+    let editingSchedule = null;    // repeating chore being edited
     let currentTab    = 'home';
 
     // Bank state
@@ -2568,85 +2661,29 @@
         const seen = new Set(own.map(t => t.id));
         return [...own, ...race.filter(t => !seen.has(t.id))];
       }
-      const { data } = await db.from('tasks').select('*').order('created_at', { ascending: false });
-      return data || [];
+      const since = new Date(Date.now() - 14 * 86400000).toISOString();
+      const [openRes, recentRes] = await Promise.all([
+        db.from('tasks').select('*').is('completed_at', null).is('missed_at', null).order('created_at', { ascending: false }),
+        db.from('tasks').select('*').gte('created_at', since).order('created_at', { ascending: false }),
+      ]);
+      // Chores done but not yet approved stay visible however old they are.
+      const pendingRes = await db.from('tasks').select('*').eq('is_chore', true).is('approved_at', null)
+        .gte('completed_at', '2000-01-01').order('completed_at', { ascending: false });
+      const byId = new Map();
+      for (const t of [...(openRes.data || []), ...(pendingRes.data || []), ...(recentRes.data || [])]) byId.set(t.id, t);
+      return [...byId.values()];
     }
 
     async function loadTasks() {
       document.getElementById('tasks-panel-content').innerHTML =
         `<div class="tasks-loading"><span style="animation:pulse 2s ease-in-out infinite">✅</span><span>Loading...</span></div>`;
 
+      // Repeating chores are handed out by the server just after midnight.
       allTasks = await fetchTasks();
-
-      // Spawn any due recurring chores
-      const recurring = allTasks.filter(t => t.is_recurring);
-      if (recurring.length > 0) {
-        const spawned = await spawnRecurringChores(recurring);
-        if (spawned > 0) allTasks = await fetchTasks();
-      }
 
       renderFilterBar();
       renderTasksPanel();
       updateHomeTasksPreview();
-    }
-
-    // ════════════════════════════════════════════════
-    //  RECURRING CHORE SPAWNING
-    // ════════════════════════════════════════════════
-    async function spawnRecurringChores(recurring) {
-      const todayLA = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-      const dayNames = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
-      const todayIdx = new Date(todayLA + 'T12:00:00').getDay();
-      const todayDayName = dayNames[todayIdx];
-
-      // Group by title + assigned_to
-      const groups = {};
-      for (const t of recurring) {
-        const key = `${t.title}|||${t.open_to_kids ? '__race__' : t.assigned_to}`;
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(t);
-      }
-
-      const spawns = [];
-
-      for (const instances of Object.values(groups)) {
-        instances.sort((a,b) => new Date(b.created_at) - new Date(a.created_at));
-        const latest = instances[0];
-
-        const pattern = latest.recurrence_pattern;
-        const todayMatches = pattern === 'daily' || pattern === 'weekly' || pattern === todayDayName;
-        if (!todayMatches) continue;
-
-        // Already have an active (incomplete) instance?
-        const hasActive = instances.some(t => !t.completed_at);
-        if (hasActive) continue;
-
-        // Already spawned one today?
-        const spawnedToday = instances.some(t => {
-          const d = new Date(t.created_at).toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
-          return d === todayLA;
-        });
-        if (spawnedToday) continue;
-
-        spawns.push({
-          title: latest.title,
-          description: latest.description,
-          created_by: latest.created_by,
-          assigned_to: latest.open_to_kids ? null : latest.assigned_to,
-          priority: latest.priority,
-          is_chore: latest.is_chore,
-          chore_amount: latest.chore_amount,
-          is_recurring: true,
-          recurrence_pattern: latest.recurrence_pattern,
-          open_to_kids: latest.open_to_kids || false
-        });
-      }
-
-      if (spawns.length > 0) {
-        await db.from('tasks').insert(spawns);
-      }
-
-      return spawns.length;
     }
 
     // ════════════════════════════════════════════════
@@ -2682,11 +2719,14 @@
 
     function getFilteredTasks() {
       if (activeFilter === 'all') return allTasks;
-      return allTasks.filter(t => t.assigned_to === activeFilter || t.created_by === activeFilter);
+      const m = familyMembers.find(x => x.id === activeFilter);
+      return allTasks.filter(t =>
+        t.assigned_to === activeFilter || t.created_by === activeFilter || t.completed_by === activeFilter ||
+        (m && m.role === 'kid' && t.open_to_kids && !t.assigned_to && !t.completed_at));
     }
 
     function renderTasksPanel() {
-      const filtered = getFilteredTasks();
+      const filtered = getFilteredTasks().filter(t => !t.missed_at);
 
       const chores = filtered.filter(t => t.is_chore);
       const tasks  = filtered.filter(t => !t.is_chore);
@@ -2700,6 +2740,7 @@
       if (choresIncomplete.length === 0 && tasksIncomplete.length === 0 &&
           choresDone.length === 0 && tasksDone.length === 0) {
         document.getElementById('tasks-panel-content').innerHTML = `
+          ${session.role === 'parent' ? `<div class="repeat-chores-btn" onclick="openSchedulesSheet()">🔁 Repeating chores<span>›</span></div>` : ''}
           <div class="tasks-empty">
             <div class="tasks-empty-emoji">${session.emoji}</div>
             <div class="tasks-empty-title">You're all caught up.</div>
@@ -2724,6 +2765,10 @@
       };
 
       let html = '';
+
+      if (session.role === 'parent') {
+        html += `<div class="repeat-chores-btn" onclick="openSchedulesSheet()">🔁 Repeating chores<span>›</span></div>`;
+      }
 
       // ── Chores section ──
       html += `
@@ -2823,22 +2868,30 @@
         rightHtml += `<span class="chore-amount">$${parseFloat(task.chore_amount).toFixed(2)}</span>`;
       }
       if (isPending && session.role === 'parent') {
-        rightHtml += `<button class="approve-btn" onclick="approveChore('${task.id}')">✓ Approve</button>`;
+        rightHtml += `<div class="btn-row"><button class="reject-btn" onclick="openRejectSheet('${task.id}')" title="Send back">↩︎</button>`
+                   + `<button class="approve-btn" onclick="approveChore('${task.id}')">✓ Approve</button></div>`;
+      }
+      if (session.role === 'kid' && task.is_chore && task.open_to_kids && !task.assigned_to && !task.completed_at) {
+        rightHtml += `<button class="approve-btn" onclick="handleCheck('${task.id}')">✋ I did it</button>`;
       }
 
-      // Race badge — show on open_to_kids chores
-      const raceBadge = (task.open_to_kids && !task.completed_at)
-        ? `<span class="race-badge">🏆 First done wins</span>` : '';
+      // First-to-grab badge
+      const raceBadge = (task.open_to_kids && !task.assigned_to && !task.completed_at)
+        ? `<span class="race-badge">🏆 First to grab</span>` : '';
+      const rejectNote = (task.reject_note && !task.completed_at)
+        ? `<div class="reject-note">↩︎ Redo${task.reject_note ? ': ' + escHtml(task.reject_note) : ''}</div>` : '';
 
       // Meta line
       const assignee = session.role === 'parent'
         ? (task.open_to_kids && !task.assigned_to
-            ? `🎮 🌷 Both kids`
+            ? (task.completed_by ? `${memberEmoji(task.completed_by)} ${memberName(task.completed_by)} grabbed it` : `Either kid`)
             : `${memberEmoji(task.assigned_to)} ${memberName(task.assigned_to)}`)
         : '';
       const assigneePart = assignee ? `<span>${assignee}</span>` : '';
       let duePart = '';
-      if (task.due_date) {
+      if (task.due_at && !task.completed_at) {
+        duePart = `<span style="color:var(--text-muted)">${dueLabel(task)}</span>`;
+      } else if (task.due_date) {
         const d = new Date(task.due_date);
         const today = new Date();
         const isToday = d.toDateString() === today.toDateString();
@@ -2884,6 +2937,7 @@
               <div class="task-body">
                 <div class="task-title">${escHtml(task.title)}</div>
                 ${raceBadge ? `<div style="margin-top:4px">${raceBadge}</div>` : ''}
+                ${rejectNote}
                 <div class="task-meta">${[assigneePart, duePart].filter(Boolean).join('<span style="margin:0 3px;opacity:0.3">·</span>')}</div>
               </div>
               <div class="task-right">${rightHtml}</div>
@@ -2894,7 +2948,23 @@
     }
 
     function escHtml(str) {
-      return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // "Due by 7 PM", "Due tonight", "Due Nov 12, 7 PM"
+    function dueLabel(task) {
+      const d = new Date(task.due_at);
+      const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+      const sameDay = (a, b) => a.toDateString() === b.toDateString();
+      const today = new Date();
+      if (!task.due_time) {
+        // Due at midnight: the deadline is the end of the day before.
+        const day = new Date(d.getTime() - 60000);
+        if (sameDay(day, today)) return 'Due tonight';
+        return 'Due ' + day.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }
+      if (sameDay(d, today)) return 'Due by ' + time;
+      return 'Due ' + d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ', ' + time;
     }
 
     // ════════════════════════════════════════════════
@@ -2989,10 +3059,11 @@
             .select();
 
           if (error || !data || data.length === 0) {
-            // Someone beat them to it
-            const winner = allTasks.find(t => t.id === taskId);
-            const winnerName = winner ? memberName(winner.completed_by) : 'someone';
-            showToast(`${winnerName} already got this one! 🏃`);
+            if (task.due_at && new Date(task.due_at) <= new Date()) {
+              showToast('Too late — this one is missed.');
+            } else {
+              showToast('Someone already got this one! 🏃');
+            }
           } else {
             showToast('Chore claimed! Waiting for approval ⏳');
             notifyParents('Chore claimed! ✋', memberName(session.id) + ' grabbed "' + task.title + '" — approve when done', 'chore-pending');
@@ -3001,10 +3072,15 @@
           // Normal chore: kid marks their own done
           const canMark = session.role === 'kid' && task.assigned_to === session.id && !task.completed_at;
           if (!canMark) return;
-          await db.from('tasks').update({
+          const { data: done } = await db.from('tasks').update({
             completed_at: new Date().toISOString(),
             completed_by: session.id
-          }).eq('id', taskId);
+          }).eq('id', taskId).is('completed_at', null).select('id');
+          if (!done || done.length === 0) {
+            showToast('Too late — this one is missed.');
+            await refreshTasks();
+            return;
+          }
           showToast('Marked done — waiting for approval ⏳');
           notifyParents('Chore done! ✓', memberName(session.id) + ' finished "' + task.title + '" — tap to approve', 'chore-pending');
         }
@@ -3067,6 +3143,51 @@
         showToast('Chore approved ✓');
       }
 
+      await refreshTasks();
+    }
+
+    // ════════════════════════════════════════════════
+    //  REJECT — send a chore back to the kid
+    // ════════════════════════════════════════════════
+    function openRejectSheet(taskId) {
+      const task = allTasks.find(t => t.id === taskId);
+      if (!task) return;
+      const who = memberName(task.completed_by || task.assigned_to);
+      const late = task.due_at && new Date(task.due_at) <= new Date();
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">Send back "${escHtml(task.title)}"?</div>
+        <div class="sheet-toggle-sub" style="margin:-6px 0 16px">${late
+          ? `The deadline has passed, so this will count as missed for ${escHtml(who)}.`
+          : `${escHtml(who)} can redo it before the deadline.`}</div>
+        <div class="sheet-field">
+          <label class="sheet-label">Note <span style="opacity:0.45">(optional)</span></label>
+          <input type="text" class="sheet-input" id="reject-note" maxlength="120" placeholder="e.g. still clothes on the floor">
+        </div>
+        <button class="sheet-save-btn" onclick="rejectChore('${task.id}')">↩︎ Send back</button>`;
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+    }
+
+    async function rejectChore(taskId) {
+      if (session.role !== 'parent') return;
+      const task = allTasks.find(t => t.id === taskId);
+      if (!task) return;
+      const note = (document.getElementById('reject-note')?.value || '').trim();
+      const kidId = task.completed_by || task.assigned_to;
+      const late  = task.due_at && new Date(task.due_at) <= new Date();
+      await db.from('tasks').update({
+        completed_at: null,
+        completed_by: null,
+        reject_note:  note || '',
+        // A first-to-grab chore goes back to the kid who grabbed it.
+        assigned_to:  kidId,
+        open_to_kids: false,
+        missed_at:    late ? new Date().toISOString() : null,
+      }).eq('id', taskId);
+      closeAddSheet();
+      showToast(late ? 'Sent back — counted as missed.' : `Sent back to ${memberName(kidId)}.`);
+      sendPush(kidId, late ? `"${task.title}" was missed` : `↩︎ Redo "${task.title}"`,
+        note || (late ? 'It was sent back after the deadline.' : 'Take another pass before the deadline.'), 'reject-' + task.id);
       await refreshTasks();
     }
 
@@ -3145,7 +3266,7 @@
       threeDaysOut.setDate(threeDaysOut.getDate() + 3);
 
       let preview = tasks.filter(t => {
-        if (t.completed_at) return false;
+        if (t.completed_at || t.missed_at) return false;
         // Kids: only their own tasks/chores + open race chores
         if (session.role === 'kid') {
           const isOwn  = t.assigned_to === session.id;
@@ -3204,13 +3325,13 @@
       sheetIsChore   = false;
       sheetPriority  = 'medium';
       sheetAssignTo  = session.role === 'kid' ? session.id : null;
-      sheetRecurrence = 'none';
-      sheetRaceMode  = false;
+      sheetWho       = 'kid';
+      sheetRepeats   = false;
+      sheetDays      = new Set();
+      editingSchedule = null;
 
       renderAddSheet();
-
-      document.getElementById('sheet-overlay').classList.add('open');
-      document.getElementById('add-sheet').classList.add('open');
+      openSheet();
 
       // Auto-focus title
       setTimeout(() => {
@@ -3219,27 +3340,44 @@
       }, 420);
     }
 
+    function openSheet() {
+      document.getElementById('sheet-overlay').classList.add('open');
+      document.getElementById('add-sheet').classList.add('open');
+    }
+
     function closeAddSheet() {
       document.getElementById('sheet-overlay').classList.remove('open');
       document.getElementById('add-sheet').classList.remove('open');
     }
 
+    const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const DAY_NAMES_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+    // Form for a task, a one-time chore, or a repeating chore (new or being edited).
     function renderAddSheet() {
       const isParent = session.role === 'parent';
+      const s = editingSchedule;
+      const kidsList = familyMembers.filter(m => m.role === 'kid');
+
+      const whoPills = sheetIsChore
+        ? [
+            ...familyMembers.map(m => `<div class="sel-pill${sheetWho === 'kid' && sheetAssignTo === m.id ? ' active' : ''}" onclick="setWho('kid','${m.id}')">${m.emoji} ${escHtml(m.name)}</div>`),
+            kidsList.length > 1 ? `<div class="sel-pill${sheetWho === 'each' ? ' active' : ''}" onclick="setWho('each')">👫 Each kid</div>` : '',
+            kidsList.length > 1 ? `<div class="sel-pill${sheetWho === 'grab' ? ' active' : ''}" onclick="setWho('grab')">🏆 First to grab</div>` : '',
+          ].join('')
+        : familyMembers.map(m => `<div class="sel-pill${sheetAssignTo === m.id ? ' active' : ''}" onclick="setWho('kid','${m.id}')">${m.emoji} ${escHtml(m.name)}</div>`).join('');
+      const whoHelp = !sheetIsChore ? ''
+        : sheetWho === 'each' ? 'Every kid gets their own copy — each does it, each gets paid.'
+        : sheetWho === 'grab' ? 'One copy — whoever does it first gets the money.' : '';
 
       const assigneeHtml = isParent ? `
         <div class="sheet-field">
-          <label class="sheet-label">Assign To</label>
-          <div class="pill-row" id="assignee-pills">
-            ${familyMembers.map(m => `
-              <div class="sel-pill${sheetAssignTo === m.id ? ' active' : ''}"
-                   onclick="setAssignee('${m.id}')">
-                ${m.emoji} ${m.name}
-              </div>`).join('')}
-          </div>
+          <label class="sheet-label">${sheetIsChore ? 'Who' : 'Assign To'}</label>
+          <div class="pill-row" id="assignee-pills">${whoPills}</div>
+          ${whoHelp ? `<div class="sheet-toggle-sub" style="margin-top:6px">${whoHelp}</div>` : ''}
         </div>` : '';
 
-      const choreToggleHtml = isParent ? `
+      const choreToggleHtml = isParent && !s ? `
         <div class="sheet-field">
           <div class="sheet-toggle-row">
             <div class="sheet-toggle-info">
@@ -3247,119 +3385,167 @@
               <div class="sheet-toggle-sub">Chores earn money and need approval</div>
             </div>
             <label class="toggle-switch">
-              <input type="checkbox" id="chore-toggle" onchange="toggleChoreMode(this.checked)">
+              <input type="checkbox" id="chore-toggle" ${sheetIsChore ? 'checked' : ''} onchange="toggleChoreMode(this.checked)">
               <div class="toggle-track"></div>
             </label>
           </div>
         </div>` : '';
 
+      const dayButtons = DAY_LETTERS.map((l, i) =>
+        `<div class="day-btn${sheetDays.has(i) ? ' active' : ''}" onclick="toggleDay(${i})" title="${DAY_NAMES_SHORT[i]}">${l}</div>`).join('');
+
+      const repeatHtml = sheetRepeats ? `
+          <div class="sheet-field">
+            <label class="sheet-label">Repeats on</label>
+            <div class="day-row">${dayButtons}</div>
+            <div class="pill-row" style="margin-top:8px">
+              <div class="sel-pill" onclick="setDays('0123456')">Every day</div>
+              <div class="sel-pill" onclick="setDays('12345')">Weekdays</div>
+            </div>
+          </div>
+          <div class="sheet-field">
+            <label class="sheet-label">Due by <span style="opacity:0.45">(optional — blank means midnight)</span></label>
+            <input type="time" class="sheet-input" id="sheet-due-time" value="${s?.due_time || ''}">
+          </div>
+          <div class="sheet-field">
+            <label class="sheet-label">Runs <span style="opacity:0.45">(optional)</span></label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="date" class="sheet-input" id="sheet-start" value="${s?.start_date || ''}" style="flex:1">
+              <span style="opacity:0.5">to</span>
+              <input type="date" class="sheet-input" id="sheet-end" value="${s?.end_date || ''}" style="flex:1">
+            </div>
+          </div>` : `
+          <div class="sheet-field">
+            <label class="sheet-label">Due <span style="opacity:0.45">(optional)</span></label>
+            <div style="display:flex;gap:8px">
+              <input type="date" class="sheet-input" id="sheet-due" style="flex:1">
+              <input type="time" class="sheet-input" id="sheet-due-time" style="flex:1">
+            </div>
+          </div>`;
+
       const choreFieldsHtml = isParent ? `
-        <div class="chore-fields" id="chore-fields">
+        <div class="chore-fields${sheetIsChore ? ' visible' : ''}" id="chore-fields">
           <div class="sheet-field">
             <label class="sheet-label">Reward Amount</label>
             <div class="amount-input-wrap">
               <span class="amount-prefix">$</span>
-              <input type="number" class="sheet-input" id="sheet-amount" placeholder="0.00" min="0" step="0.25">
+              <input type="number" class="sheet-input" id="sheet-amount" placeholder="0.00" min="0" step="0.25" value="${s ? Number(s.amount || 0) : ''}">
             </div>
           </div>
+          ${s ? '' : `
           <div class="sheet-field">
-            <label class="sheet-label">Repeats</label>
-            <div class="pill-row">
-              <div class="sel-pill active" onclick="setRecurrence('none', this)">Once</div>
-              <div class="sel-pill" onclick="setRecurrence('daily', this)">Daily</div>
-              <div class="sel-pill" onclick="setRecurrence('monday', this)">Mon</div>
-              <div class="sel-pill" onclick="setRecurrence('tuesday', this)">Tue</div>
-              <div class="sel-pill" onclick="setRecurrence('wednesday', this)">Wed</div>
-              <div class="sel-pill" onclick="setRecurrence('thursday', this)">Thu</div>
-              <div class="sel-pill" onclick="setRecurrence('friday', this)">Fri</div>
-              <div class="sel-pill" onclick="setRecurrence('saturday', this)">Sat</div>
-              <div class="sel-pill" onclick="setRecurrence('sunday', this)">Sun</div>
-            </div>
-          </div>
-          <div class="sheet-field">
-            <div class="sheet-toggle-row" style="background:rgba(245,158,11,0.07);border-color:rgba(245,158,11,0.2)">
+            <div class="sheet-toggle-row">
               <div class="sheet-toggle-info">
-                <div class="sheet-toggle-label">🏆 First one done wins</div>
-                <div class="sheet-toggle-sub">Both kids see it — whoever finishes first gets the money</div>
+                <div class="sheet-toggle-label">🔁 Repeats</div>
+                <div class="sheet-toggle-sub">Handed out automatically on the days you pick</div>
               </div>
               <label class="toggle-switch">
-                <input type="checkbox" id="race-toggle" onchange="setRaceMode(this.checked)">
+                <input type="checkbox" ${sheetRepeats ? 'checked' : ''} onchange="setRepeats(this.checked)">
                 <div class="toggle-track"></div>
               </label>
             </div>
-          </div>
+          </div>`}
+          ${repeatHtml}
+        </div>` : '';
+
+      const prio = s?.priority || sheetPriority;
+      const taskDueHtml = !sheetIsChore ? `
+        <div class="sheet-field">
+          <label class="sheet-label">Due Date <span style="opacity:0.45">(optional)</span></label>
+          <input type="date" class="sheet-input" id="sheet-due">
         </div>` : '';
 
       document.getElementById('sheet-body').innerHTML = `
-        <div class="sheet-title">New ${sheetIsChore ? 'Chore' : 'Task'}</div>
+        <div class="sheet-title">${s ? 'Edit Repeating Chore' : sheetIsChore ? (sheetRepeats ? 'New Repeating Chore' : 'New Chore') : 'New Task'}</div>
 
         <div class="sheet-field">
           <label class="sheet-label">Title</label>
           <input type="text" class="sheet-input" id="sheet-title-input"
-                 placeholder="What needs doing?" maxlength="80">
+                 placeholder="What needs doing?" maxlength="80" value="${escHtml(s?.title || '')}">
         </div>
 
         ${choreToggleHtml}
-        ${choreFieldsHtml}
         ${assigneeHtml}
+        ${choreFieldsHtml}
 
         <div class="sheet-field">
           <label class="sheet-label">Priority</label>
           <div class="pill-row">
-            <div class="sel-pill p-urgent" onclick="setPriority('urgent', this)">🔴 Urgent</div>
-            <div class="sel-pill p-high"   onclick="setPriority('high', this)">🟠 High</div>
-            <div class="sel-pill p-medium active" onclick="setPriority('medium', this)">🟡 Medium</div>
-            <div class="sel-pill p-low"   onclick="setPriority('low', this)">🟢 Low</div>
+            <div class="sel-pill p-urgent${prio === 'urgent' ? ' active' : ''}" onclick="setPriority('urgent', this)">🔴 Urgent</div>
+            <div class="sel-pill p-high${prio === 'high' ? ' active' : ''}"   onclick="setPriority('high', this)">🟠 High</div>
+            <div class="sel-pill p-medium${prio === 'medium' ? ' active' : ''}" onclick="setPriority('medium', this)">🟡 Medium</div>
+            <div class="sel-pill p-low${prio === 'low' ? ' active' : ''}"   onclick="setPriority('low', this)">🟢 Low</div>
           </div>
         </div>
 
-        <div class="sheet-field">
-          <label class="sheet-label">Due Date <span style="opacity:0.45">(optional)</span></label>
-          <input type="date" class="sheet-input" id="sheet-due">
-        </div>
+        ${taskDueHtml}
 
         <div class="sheet-field">
           <label class="sheet-label">Notes <span style="opacity:0.45">(optional)</span></label>
-          <textarea class="sheet-input" id="sheet-desc" placeholder="Any extra details…" rows="3"></textarea>
+          <textarea class="sheet-input" id="sheet-desc" placeholder="Any extra details…" rows="3">${escHtml(s?.description || '')}</textarea>
         </div>
 
-        <button class="sheet-save-btn" onclick="saveTask()">Save</button>
+        <button class="sheet-save-btn" onclick="${s ? 'saveSchedule()' : 'saveTask()'}">Save</button>
+        ${s ? `<button class="sheet-save-btn" style="margin-top:10px;background:transparent;border:1px solid rgba(239,68,68,0.4);color:#EF4444" onclick="deleteSchedule('${s.id}')">Delete repeating chore</button>` : ''}
       `;
+    }
+
+    // Re-render the sheet but keep what's been typed so far.
+    function rerenderSheet() {
+      const keep = {};
+      for (const id of ['sheet-title-input', 'sheet-amount', 'sheet-desc', 'sheet-due', 'sheet-due-time', 'sheet-start', 'sheet-end']) {
+        const el = document.getElementById(id);
+        if (el) keep[id] = el.value;
+      }
+      renderAddSheet();
+      for (const [id, v] of Object.entries(keep)) {
+        const el = document.getElementById(id);
+        if (el && v !== '') el.value = v;
+      }
     }
 
     function toggleChoreMode(on) {
       sheetIsChore = on;
-      document.querySelector('.sheet-title').textContent = on ? 'New Chore' : 'New Task';
-      const cf = document.getElementById('chore-fields');
-      if (cf) cf.classList.toggle('visible', on);
+      if (on && !sheetAssignTo) { const k = familyMembers.find(m => m.role === 'kid'); sheetAssignTo = k?.id || null; }
+      rerenderSheet();
     }
 
     function setPriority(val, el) {
       sheetPriority = val;
+      if (editingSchedule) editingSchedule.priority = val;
       document.querySelectorAll('.add-sheet .sel-pill[class*="p-"]').forEach(p => p.classList.remove('active'));
       el.classList.add('active');
     }
 
-    function setAssignee(id) {
-      sheetAssignTo = id;
-      document.querySelectorAll('#assignee-pills .sel-pill').forEach(p => p.classList.remove('active'));
-      event.target.classList.add('active');
+    function setWho(who, id) {
+      sheetWho = who;
+      if (who === 'kid') sheetAssignTo = id;
+      rerenderSheet();
     }
 
-    function setRecurrence(val, el) {
-      sheetRecurrence = val;
-      el.closest('.pill-row').querySelectorAll('.sel-pill').forEach(p => p.classList.remove('active'));
-      el.classList.add('active');
+    function setRepeats(on) {
+      sheetRepeats = on;
+      if (on && sheetDays.size === 0) sheetDays = new Set([0, 1, 2, 3, 4, 5, 6]);
+      rerenderSheet();
     }
 
-    function setRaceMode(on) {
-      sheetRaceMode = on;
-      // Hide/show assignee pills when race mode toggled
-      const assigneeField = document.querySelector('#assignee-pills')?.closest('.sheet-field');
-      if (assigneeField) {
-        assigneeField.style.opacity  = on ? '0.4' : '1';
-        assigneeField.style.pointerEvents = on ? 'none' : '';
-      }
+    function toggleDay(i) {
+      if (sheetDays.has(i)) sheetDays.delete(i); else sheetDays.add(i);
+      rerenderSheet();
+    }
+
+    function setDays(str) {
+      sheetDays = new Set(str.split('').map(Number));
+      rerenderSheet();
+    }
+
+    // Local (Pacific) date + optional time → ISO deadline. No time = end of that day.
+    function dueIso(date, time) {
+      if (!date) return null;
+      if (time) return new Date(`${date}T${time}:00`).toISOString();
+      const d = new Date(`${date}T00:00:00`);
+      d.setDate(d.getDate() + 1);
+      return d.toISOString();
     }
 
     async function saveTask() {
@@ -3370,33 +3556,45 @@
         return;
       }
 
+      const dueVal    = document.getElementById('sheet-due')?.value;
+      const timeVal   = document.getElementById('sheet-due-time')?.value;
+      const amountVal = parseFloat(document.getElementById('sheet-amount')?.value || '0') || 0;
+      const desc      = (document.getElementById('sheet-desc')?.value || '').trim();
+
+      if (sheetIsChore && sheetRepeats) return saveSchedule();
+      if (sheetIsChore && timeVal && !dueVal) { showToast('Pick a due date for that time.'); return; }
+
       const btn = document.querySelector('.sheet-save-btn');
       btn.disabled = true;
       btn.textContent = 'Saving…';
 
-      const isRecurring = sheetIsChore && sheetRecurrence !== 'none';
-      const dueVal = document.getElementById('sheet-due')?.value;
-      const amountVal = parseFloat(document.getElementById('sheet-amount')?.value || '0') || 0;
-      const desc = (document.getElementById('sheet-desc')?.value || '').trim();
-      const assignTo = sheetRaceMode
-        ? null
-        : (sheetAssignTo || (session.role === 'kid' ? session.id : familyMembers[0]?.id));
-
-      const record = {
+      const base = {
         title,
-        description:        desc || null,
-        created_by:         session.id,
-        assigned_to:        assignTo,
-        priority:           sheetPriority,
-        is_chore:           sheetIsChore,
-        chore_amount:       sheetIsChore ? amountVal : 0,
-        is_recurring:       isRecurring,
-        recurrence_pattern: isRecurring ? sheetRecurrence : null,
-        due_date:           dueVal ? new Date(dueVal + 'T23:59:00').toISOString() : null,
-        open_to_kids:       sheetIsChore && sheetRaceMode
+        description:  desc || null,
+        created_by:   session.id,
+        priority:     sheetPriority,
+        is_chore:     sheetIsChore,
+        chore_amount: sheetIsChore ? amountVal : 0,
+        is_recurring: false,
       };
 
-      const { error } = await db.from('tasks').insert(record);
+      let records;
+      if (!sheetIsChore) {
+        records = [{ ...base,
+          assigned_to: sheetAssignTo || (session.role === 'kid' ? session.id : familyMembers[0]?.id),
+          due_date: dueVal ? new Date(dueVal + 'T23:59:00').toISOString() : null }];
+      } else {
+        const chore = { ...base, due_at: dueIso(dueVal, timeVal), due_time: dueVal && timeVal ? timeVal : null };
+        if (sheetWho === 'each') {
+          records = familyMembers.filter(m => m.role === 'kid').map(k => ({ ...chore, assigned_to: k.id }));
+        } else if (sheetWho === 'grab') {
+          records = [{ ...chore, assigned_to: null, open_to_kids: true }];
+        } else {
+          records = [{ ...chore, assigned_to: sheetAssignTo || familyMembers.find(m => m.role === 'kid')?.id }];
+        }
+      }
+
+      const { error } = await db.from('tasks').insert(records);
 
       if (error) {
         showToast('Error saving — try again.');
@@ -3408,6 +3606,138 @@
       closeAddSheet();
       showToast(sheetIsChore ? 'Chore added ✓' : 'Task added ✓');
       await refreshTasks();
+    }
+
+    // ════════════════════════════════════════════════
+    //  REPEATING CHORES (parents)
+    // ════════════════════════════════════════════════
+    let choreSchedules = [];
+
+    function scheduleWhoLabel(s) {
+      if (s.who === 'each') return '👫 Each kid';
+      if (s.who === 'grab') return '🏆 First to grab';
+      return `${memberEmoji(s.kid_id)} ${memberName(s.kid_id)}`;
+    }
+
+    function scheduleDaysLabel(days) {
+      const d = String(days || '');
+      if (d.length === 7) return 'Every day';
+      if (d === '12345') return 'Weekdays';
+      if (d === '06') return 'Weekends';
+      return d.split('').map(Number).sort().map(i => DAY_NAMES_SHORT[i]).join(', ') || 'No days';
+    }
+
+    function timeLabel(hhmm) {
+      if (!hhmm) return '';
+      const [h, m] = hhmm.split(':').map(Number);
+      const d = new Date(); d.setHours(h, m, 0, 0);
+      return d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
+    }
+
+    async function openSchedulesSheet() {
+      if (session.role !== 'parent') return;
+      const { data } = await db.from('chore_schedules').select('*').order('title');
+      choreSchedules = data || [];
+      const rows = choreSchedules.map(s => {
+        const bits = [scheduleWhoLabel(s), scheduleDaysLabel(s.days)];
+        if (s.due_time) bits.push('due by ' + timeLabel(s.due_time));
+        if (s.start_date || s.end_date) bits.push(`${s.start_date || '…'} → ${s.end_date || '…'}`);
+        return `
+          <div class="schedule-row${s.paused ? ' paused' : ''}">
+            <div class="schedule-main" onclick="editSchedule('${s.id}')">
+              <div class="schedule-title">${escHtml(s.title)}${s.paused ? ' <span class="paused-badge">Paused</span>' : ''}</div>
+              <div class="schedule-meta">${bits.join(' · ')}</div>
+            </div>
+            <div class="schedule-amount">$${Number(s.amount || 0).toFixed(2)}</div>
+            <button class="schedule-pause" onclick="toggleSchedulePause('${s.id}')">${s.paused ? '▶︎' : '⏸'}</button>
+          </div>`;
+      }).join('');
+      document.getElementById('sheet-body').innerHTML = `
+        <div class="sheet-title">🔁 Repeating chores</div>
+        <div class="sheet-toggle-sub" style="margin:-6px 0 14px">Handed out just after midnight on their days. Tap one to edit — changes start with the next day's copy.</div>
+        ${rows || '<div class="section-empty">No repeating chores yet.</div>'}
+        <button class="sheet-save-btn" style="margin-top:16px" onclick="newScheduleFromList()">+ New repeating chore</button>`;
+      openSheet();
+    }
+
+    function newScheduleFromList() {
+      openAddSheet();
+      sheetIsChore = true;
+      sheetRepeats = true;
+      sheetWho = 'grab';
+      sheetDays = new Set([0, 1, 2, 3, 4, 5, 6]);
+      renderAddSheet();
+    }
+
+    function editSchedule(id) {
+      const s = choreSchedules.find(x => x.id === id);
+      if (!s) return;
+      editingSchedule = { ...s };
+      sheetIsChore  = true;
+      sheetRepeats  = true;
+      sheetWho      = s.who || 'grab';
+      sheetAssignTo = s.kid_id || null;
+      sheetPriority = s.priority || 'medium';
+      sheetDays     = new Set(String(s.days || '').split('').filter(Boolean).map(Number));
+      renderAddSheet();
+    }
+
+    async function saveSchedule() {
+      const title = (document.getElementById('sheet-title-input')?.value || '').trim();
+      if (!title) { showToast('Please add a title.'); return; }
+      if (sheetDays.size === 0) { showToast('Pick at least one day.'); return; }
+      if (sheetWho === 'kid' && !sheetAssignTo) { showToast('Pick who does it.'); return; }
+      const start = document.getElementById('sheet-start')?.value || null;
+      const end   = document.getElementById('sheet-end')?.value || null;
+      if (start && end && end < start) { showToast('The end date is before the start date.'); return; }
+
+      const record = {
+        title,
+        description: (document.getElementById('sheet-desc')?.value || '').trim() || null,
+        amount:      parseFloat(document.getElementById('sheet-amount')?.value || '0') || 0,
+        who:         sheetWho,
+        kid_id:      sheetWho === 'kid' ? sheetAssignTo : null,
+        days:        [...sheetDays].sort().join(''),
+        due_time:    document.getElementById('sheet-due-time')?.value || null,
+        start_date:  start,
+        end_date:    end,
+        priority:    sheetPriority,
+        updated_at:  new Date().toISOString(),
+      };
+      const btn = document.querySelector('.sheet-save-btn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      const { error } = editingSchedule
+        ? await db.from('chore_schedules').update(record).eq('id', editingSchedule.id)
+        : await db.from('chore_schedules').insert({ ...record, created_by: session.id, paused: false });
+      if (error) {
+        showToast('Error saving — try again.');
+        btn.disabled = false; btn.textContent = 'Save';
+        return;
+      }
+      // A brand-new chore that's due today shows up right away.
+      if (!editingSchedule) await fhqApi('/api/chores/run', { method: 'POST' });
+      showToast(editingSchedule ? 'Saved — changes start with the next copy ✓' : 'Repeating chore added ✓');
+      editingSchedule = null;
+      await refreshTasks();
+      openSchedulesSheet();
+    }
+
+    async function toggleSchedulePause(id) {
+      const s = choreSchedules.find(x => x.id === id);
+      if (!s) return;
+      await db.from('chore_schedules').update({ paused: !s.paused, updated_at: new Date().toISOString() }).eq('id', id);
+      showToast(s.paused ? `"${s.title}" resumed` : `"${s.title}" paused`);
+      openSchedulesSheet();
+    }
+
+    async function deleteSchedule(id) {
+      const s = choreSchedules.find(x => x.id === id);
+      if (!s || !confirm(`Delete the repeating chore "${s.title}"? Copies already handed out stay.`)) return;
+      await db.from('chore_schedules').delete().eq('id', id);
+      editingSchedule = null;
+      showToast('Repeating chore deleted.');
+      openSchedulesSheet();
     }
 
     // ════════════════════════════════════════════════
@@ -3787,6 +4117,19 @@
       const balance     = parseFloat(bal.balance     || 0);
       const totalEarned = parseFloat(bal.total_earned || 0);
 
+      // Chores missed this week (since Sunday) — parents only
+      let missedHtml = '';
+      if (session.role === 'parent') {
+        const weekStart = new Date(); weekStart.setHours(0, 0, 0, 0); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        const since = weekStart.toISOString();
+        const [ownMissed, grabMissed] = await Promise.all([
+          db.from('tasks').select('id').eq('assigned_to', bankKidId).gte('missed_at', since),
+          db.from('tasks').select('id').eq('open_to_kids', true).is('assigned_to', null).gte('missed_at', since),
+        ]);
+        const n = (ownMissed.data || []).length + (grabMissed.data || []).length;
+        if (n > 0) missedHtml = `<div class="bank-missed">⚠️ ${n} chore${n === 1 ? '' : 's'} missed this week</div>`;
+      }
+
       // Auto-mark achieved goals + fire 100% push
       const unachieved = goals.filter(g => !g.achieved_at && balance >= parseFloat(g.target_amount));
       for (const g of unachieved) {
@@ -3832,6 +4175,7 @@
           <div class="bank-hero-label">Current Balance</div>
           <div class="bank-hero-amount">$${balance.toFixed(2)}</div>
           <div class="bank-hero-earned">Total earned: $${totalEarned.toFixed(2)}</div>
+          ${missedHtml}
           ${payoutBtn}
         </div>`;
 

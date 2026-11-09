@@ -130,32 +130,31 @@ async function authorize(env, me, q, rows) {
   } else if (q.table === 'savings_goals') {
     extra.push(own);
     for (const r of rows) r.family_member_id = me.id;
+  } else if (q.table === 'chore_schedules') {
+    throw new QueryError('Only a parent can set up repeating chores.', 403);
   } else if (q.table === 'tasks') {
+    // Kids see their own tasks and chores plus unclaimed first-to-grab chores — never
+    // missed ones.
+    const mine = { sql: '(assigned_to = ? OR open_to_kids = 1) AND missed_at IS NULL', args: [me.id] };
     if (q.op === 'select') {
-      extra.push({ sql: 'assigned_to = ? OR open_to_kids = 1', args: [me.id] });
+      extra.push(mine);
     } else if (q.op === 'update') {
       const allowed = new Set(['completed_at', 'completed_by']);
       for (const k of Object.keys(rows[0])) if (!allowed.has(k)) throw new QueryError('Not allowed', 403);
       if (rows[0].completed_by != null && rows[0].completed_by !== me.id) throw new QueryError('Not allowed', 403);
-      extra.push({ sql: 'assigned_to = ? OR open_to_kids = 1', args: [me.id] });
+      extra.push(mine);
+      // Checking off only counts before the deadline.
+      if (rows[0].completed_at != null) {
+        extra.push({ sql: 'due_at IS NULL OR due_at > ?', args: [new Date().toISOString()] });
+      }
     } else if (q.op === 'delete') {
       extra.push({ sql: 'assigned_to = ? AND is_chore = 0', args: [me.id] });
     } else if (q.op === 'insert') {
       for (const r of rows) {
-        const paid = r.is_chore === true || r.open_to_kids === true;
-        if (paid) {
-          // The app re-creates today's copy of a recurring chore when anyone opens it,
-          // kids included. Only allow that when a parent already set up the same chore.
-          const match = await env.DB.prepare(
-            `SELECT 1 FROM tasks WHERE is_recurring = 1 AND title = ? AND is_chore = ?
-               AND IFNULL(chore_amount, 0) = ? AND IFNULL(recurrence_pattern, '') = ? LIMIT 1`)
-            .bind(String(r.title ?? ''), r.is_chore ? 1 : 0, Number(r.chore_amount || 0), String(r.recurrence_pattern ?? ''))
-            .first();
-          if (!match) throw new QueryError('Only a parent can create chores.', 403);
-        } else {
-          r.assigned_to = me.id;
-          r.created_by = me.id;
-        }
+        if (r.is_chore === true || r.open_to_kids === true) throw new QueryError('Only a parent can create chores.', 403);
+        r.assigned_to = me.id;
+        r.created_by = me.id;
+        for (const k of ['schedule_id', 'for_date', 'slot', 'due_at', 'missed_at', 'reject_note', 'reminded_at']) delete r[k];
       }
     }
   }

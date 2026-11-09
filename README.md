@@ -26,15 +26,29 @@ separate Workers; that setup is in `z_archive/` and git history.)
   tasks and race chores, and only calendar events with their name in the title (3 days).
   Parents can do everything. These rules are enforced by the server, not just hidden in the page.
 
+## Chores
+
+- **Who:** a specific kid, **each kid** (everyone gets their own copy and is paid separately) or
+  **first to grab** (one copy; the first kid to tap "I did it" gets it).
+- **Repeating chores** are set up once by a parent (Tasks → 🔁 Repeating chores): days of the
+  week, optional due-by time, optional date range, pause. The Worker hands out each day's copies
+  just after midnight Pacific — phones never create them.
+- **Deadlines:** a chore not checked off by its due-by time (or midnight) is **missed** — no pay.
+  Checked off in time = paid whenever a parent approves. **Send back** (↩︎) returns it to the kid
+  with an optional note; after the deadline it counts as missed.
+- **Reminders:** push 1 hour before a due-by time, or 7 PM for chores due at midnight.
+- Parents see "chores missed this week" per kid on the Bank tab.
+
 ## Live updates
 
 The app checks for changes when it's opened and every 15 seconds while it's on screen, and
 refreshes the tasks, shopping list or meals if someone else changed them.
 
-## Scheduled notifications
+## Scheduled jobs
 
-One hourly cron (`0 * * * *`). In Pacific time: 7 AM weather, due-today reminders and the
-payout check; Sunday 10 AM meal-plan reminder if the week is empty. Each job runs once a day.
+One cron every 15 minutes (`*/15 * * * *`): hands out repeating chores, marks missed chores and
+sends chore reminders. In Pacific time, once a day: 7 AM weather, due-today reminders and the
+payout check; Sunday 10 AM meal-plan reminder if the week is empty.
 
 ## Secrets (Worker → Settings → Variables and Secrets)
 

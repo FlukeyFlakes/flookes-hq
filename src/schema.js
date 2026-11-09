@@ -14,6 +14,17 @@ export const TABLES = {
     priority: 'text', is_chore: 'bool', chore_amount: 'num', is_recurring: 'bool',
     recurrence_pattern: 'text', due_date: 'text', completed_at: 'text', completed_by: 'text',
     approved_by: 'text', approved_at: 'text', open_to_kids: 'bool', created_at: 'text',
+    // Chores v2: which repeating chore and day a copy belongs to, its deadline, and
+    // what happened to it. slot = the kid's id, or 'grab' for a first-to-grab copy.
+    schedule_id: 'text', for_date: 'text', slot: 'text', due_at: 'text', due_time: 'text',
+    missed_at: 'text', reject_note: 'text', reminded_at: 'text',
+  },
+  // Repeating chores, defined once. who: 'kid' (kid_id), 'each' (every kid gets a copy)
+  // or 'grab' (one copy, first kid to do it). days: weekday digits, 0 = Sunday ("12345").
+  chore_schedules: {
+    id: 'text', title: 'text', description: 'text', amount: 'num', who: 'text', kid_id: 'text',
+    days: 'text', due_time: 'text', start_date: 'text', end_date: 'text', paused: 'bool',
+    priority: 'text', created_by: 'text', created_at: 'text', updated_at: 'text',
   },
   bank_balances: {
     id: 'text', family_member_id: 'text', balance: 'num', total_earned: 'num', updated_at: 'text',
@@ -53,6 +64,7 @@ export const DEFAULTS = {
   ingredients: { store: 'any', category: 'other' },
   shopping_list_items: { checked: false },
   family_members: { emoji: '😊', display_order: 0 },
+  chore_schedules: { amount: 0, who: 'grab', days: '0123456', paused: false, priority: 'medium' },
 };
 
 // Parent → child relations the app embeds in selects, e.g. meals?select=id,ingredients(name,store)
@@ -78,6 +90,13 @@ export const SCHEMA = [
   'CREATE INDEX IF NOT EXISTS ingredients_meal ON ingredients(meal_id)',
   'CREATE INDEX IF NOT EXISTS shop_week ON shopping_list_items(week_start_date)',
   'CREATE INDEX IF NOT EXISTS tmpl_ing ON template_ingredients(template_id)',
+  // Which repeating chores were already handed out on which day, so a copy a parent
+  // deletes doesn't come back.
+  `CREATE TABLE IF NOT EXISTS chore_runs (
+     schedule_id TEXT NOT NULL,
+     for_date    TEXT NOT NULL,
+     PRIMARY KEY (schedule_id, for_date)
+   )`,
   `CREATE TABLE IF NOT EXISTS push_subscriptions (
      id TEXT PRIMARY KEY,
      family_member_id TEXT NOT NULL,
@@ -101,4 +120,15 @@ export const SCHEMA = [
   `CREATE TABLE IF NOT EXISTS changes (tbl TEXT PRIMARY KEY, v INTEGER NOT NULL)`,
   // Which scheduled jobs already ran today, so the hourly cron never doubles up.
   `CREATE TABLE IF NOT EXISTS job_runs (job TEXT PRIMARY KEY, ran_on TEXT NOT NULL)`,
+];
+
+// Columns added after the first release. CREATE TABLE IF NOT EXISTS won't add them to an
+// existing table, so each is added with ALTER TABLE (an error means it's already there).
+export const MIGRATIONS = [
+  ...['schedule_id', 'for_date', 'slot', 'due_at', 'due_time', 'missed_at', 'reject_note', 'reminded_at']
+    .map((c) => `ALTER TABLE tasks ADD COLUMN ${c} TEXT`),
+];
+export const AFTER_MIGRATIONS = [
+  'CREATE UNIQUE INDEX IF NOT EXISTS tasks_schedule_slot ON tasks(schedule_id, for_date, slot)',
+  'CREATE INDEX IF NOT EXISTS tasks_open_chores ON tasks(is_chore, completed_at, missed_at)',
 ];

@@ -8,10 +8,12 @@ routes = [
   { pattern = "family.flookesitup.com", custom_domain = true }
 ]
 
-# One hourly job; the Worker picks what to run by Pacific time (7 AM weather, due-today
-# and payout checks; Sunday 10 AM meal-plan reminder), each once a day.
+# One job every 15 minutes. It hands out the day's repeating chores (just after midnight
+# Pacific), marks chores missed at their deadline and sends chore reminders. The daily
+# pushes (7 AM weather, due-today and payout checks; Sunday 10 AM meal-plan reminder)
+# each run once a day at their hour.
 [triggers]
-crons = ["0 * * * *"]
+crons = ["*/15 * * * *"]
 
 # The app's pages. Every request goes through the Worker first so security headers
 # are added and /api/* is checked for sign-in. html_handling = "none" keeps

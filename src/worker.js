@@ -4,7 +4,8 @@
 // Everything under /api/ needs a signed-in family member except the login screen's
 // list of names and the login itself.
 
-import { SCHEMA, TABLES } from './schema.js';
+import { SCHEMA, TABLES, MIGRATIONS, AFTER_MIGRATIONS } from './schema.js';
+import { runChoreJobs, generateToday, migrateChoresOnce } from './chores.js';
 import { runQuery, QueryError, bump } from './query.js';
 import { pushTo, vapidKeys, isPushEndpoint } from './push.js';
 
@@ -18,6 +19,11 @@ let schemaReady = false;
 async function ensureSchema(env) {
   if (schemaReady) return;
   await env.DB.batch(SCHEMA.map((s) => env.DB.prepare(s)));
+  for (const m of MIGRATIONS) {
+    try { await env.DB.prepare(m).run(); } catch (_) { /* column already there */ }
+  }
+  await env.DB.batch(AFTER_MIGRATIONS.map((s) => env.DB.prepare(s)));
+  await migrateChoresOnce(env);
   schemaReady = true;
 }
 
@@ -224,6 +230,12 @@ async function handleApi(req, env, url, ctx) {
   }
 
   if (path === '/api/calendar' && method === 'GET') return calendar(env, me, url);
+
+  // Hand out today's copies right after a parent adds or changes a repeating chore.
+  if (path === '/api/chores/run' && method === 'POST') {
+    if (me.role !== 'parent') return err('Parents only.', 403);
+    return json({ created: await generateToday(env) });
+  }
 
   if (path.startsWith('/api/ai/') && method === 'POST') {
     const body = await readJson(req);
@@ -479,6 +491,7 @@ async function runScheduled(env) {
   if (hour === 7 && await onceToday(env, 'morning', date)) jobs.push(jobWeather(env), jobDueReminders(env, date), jobPayoutCheck(env));
   if (hour === 10 && dow === 0 && await onceToday(env, 'meal-plan', date)) jobs.push(jobMealPlanReminder(env, date));
   await Promise.all(jobs);
+  await runChoreJobs(env);
   // Tidy up expired sign-ins.
   await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now()).run();
 }
@@ -518,7 +531,8 @@ async function jobDueReminders(env, date) {
   try {
     const { results } = await env.DB.prepare(`
       SELECT id, title, assigned_to FROM tasks
-      WHERE substr(due_date, 1, 10) = ? AND completed_at IS NULL AND assigned_to IS NOT NULL`).bind(date).all();
+      WHERE substr(due_date, 1, 10) = ? AND completed_at IS NULL AND assigned_to IS NOT NULL
+        AND due_at IS NULL AND missed_at IS NULL`).bind(date).all();
     await Promise.all(results.map((t) => pushTo(env, t.assigned_to, 'Due today ⏰', `"${t.title}"`, `due-${t.id}`)));
   } catch (e) { console.log('jobDueReminders', e && e.message); }
 }
