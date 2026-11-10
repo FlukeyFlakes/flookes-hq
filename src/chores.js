@@ -68,17 +68,19 @@ export async function generateToday(env) {
       : s.who === 'kid' ? [s.kid_id]
       : ['grab'];
     const dueAt = dueAtFor(date, s.due_time);
+    const hasBonus = !!s.bonus_time && Number(s.bonus_amount) > 0;
+    const bonusAt = hasBonus ? pacificToIso(date, s.bonus_time) : null;
     for (const slot of slots) {
       if (!slot) continue;
       const grab = slot === 'grab';
       stmts.push(env.DB.prepare(`
         INSERT OR IGNORE INTO tasks (id, title, description, created_by, assigned_to, priority, is_chore,
           chore_amount, is_recurring, recurrence_pattern, open_to_kids, created_at,
-          schedule_id, for_date, slot, due_at, due_time)
-        VALUES (?, ?, ?, ?, ?, ?, 1, ?, 1, NULL, ?, ?, ?, ?, ?, ?, ?)`)
+          schedule_id, for_date, slot, due_at, due_time, bonus_at, bonus_amount)
+        VALUES (?, ?, ?, ?, ?, ?, 1, ?, 1, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .bind(crypto.randomUUID(), s.title, s.description || null, s.created_by, grab ? null : slot,
           s.priority || 'medium', Number(s.amount || 0), grab ? 1 : 0, now,
-          s.id, date, slot, dueAt, s.due_time || null));
+          s.id, date, slot, dueAt, s.due_time || null, bonusAt, hasBonus ? Number(s.bonus_amount) : null));
       made++;
     }
     stmts.push(env.DB.prepare('INSERT OR IGNORE INTO chore_runs (schedule_id, for_date) VALUES (?, ?)').bind(s.id, date));

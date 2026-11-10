@@ -18,6 +18,8 @@ export const TABLES = {
     // what happened to it. slot = the kid's id, or 'grab' for a first-to-grab copy.
     schedule_id: 'text', for_date: 'text', slot: 'text', due_at: 'text', due_time: 'text',
     missed_at: 'text', reject_note: 'text', reminded_at: 'text',
+    // Early bonus: bonus_amount instead of chore_amount if checked off by bonus_at.
+    bonus_at: 'text', bonus_amount: 'num',
   },
   // Repeating chores, defined once. who: 'kid' (kid_id), 'each' (every kid gets a copy)
   // or 'grab' (one copy, first kid to do it). days: weekday digits, 0 = Sunday ("12345").
@@ -25,6 +27,7 @@ export const TABLES = {
     id: 'text', title: 'text', description: 'text', amount: 'num', who: 'text', kid_id: 'text',
     days: 'text', due_time: 'text', start_date: 'text', end_date: 'text', paused: 'bool',
     priority: 'text', created_by: 'text', created_at: 'text', updated_at: 'text',
+    bonus_time: 'text', bonus_amount: 'num',
   },
   bank_balances: {
     id: 'text', family_member_id: 'text', balance: 'num', total_earned: 'num', updated_at: 'text',
@@ -127,6 +130,10 @@ export const SCHEMA = [
 export const MIGRATIONS = [
   ...['schedule_id', 'for_date', 'slot', 'due_at', 'due_time', 'missed_at', 'reject_note', 'reminded_at']
     .map((c) => `ALTER TABLE tasks ADD COLUMN ${c} TEXT`),
+  'ALTER TABLE tasks ADD COLUMN bonus_at TEXT',
+  'ALTER TABLE tasks ADD COLUMN bonus_amount REAL',
+  'ALTER TABLE chore_schedules ADD COLUMN bonus_time TEXT',
+  'ALTER TABLE chore_schedules ADD COLUMN bonus_amount REAL',
 ];
 export const AFTER_MIGRATIONS = [
   'CREATE UNIQUE INDEX IF NOT EXISTS tasks_schedule_slot ON tasks(schedule_id, for_date, slot)',

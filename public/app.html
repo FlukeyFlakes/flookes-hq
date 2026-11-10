@@ -1086,6 +1086,13 @@
       cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
+    .bonus-note {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      text-align: right;
+      max-width: 90px;
+      line-height: 1.2;
+    }
     .reject-note {
       margin-top: 4px;
       font-size: 0.72rem;
@@ -2865,7 +2872,10 @@
       // Right side
       let rightHtml = '';
       if (task.is_chore && task.chore_amount > 0) {
-        rightHtml += `<span class="chore-amount">$${parseFloat(task.chore_amount).toFixed(2)}</span>`;
+        rightHtml += `<span class="chore-amount">$${earnedAmount(task).toFixed(2)}</span>`;
+        if (hasBonusNow(task)) {
+          rightHtml += `<span class="bonus-note">until ${shortTime(task.bonus_at)}, then $${parseFloat(task.chore_amount || 0).toFixed(2)}</span>`;
+        }
       }
       if (isPending && session.role === 'parent') {
         rightHtml += `<div class="btn-row"><button class="reject-btn" onclick="openRejectSheet('${task.id}')" title="Send back">↩︎</button>`
@@ -2949,6 +2959,23 @@
 
     function escHtml(str) {
       return (str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    // Early bonus: worth bonus_amount if checked off by bonus_at, otherwise chore_amount.
+    function hasBonus(task) {
+      return !!task.bonus_at && parseFloat(task.bonus_amount || 0) > 0;
+    }
+    function hasBonusNow(task) {
+      return hasBonus(task) && !task.completed_at && new Date() < new Date(task.bonus_at);
+    }
+    function earnedAmount(task) {
+      const base = parseFloat(task.chore_amount || 0);
+      if (!hasBonus(task)) return base;
+      const when = task.completed_at ? new Date(task.completed_at) : new Date();
+      return when <= new Date(task.bonus_at) ? parseFloat(task.bonus_amount) : base;
+    }
+    function shortTime(iso) {
+      return new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }).replace(':00', '');
     }
 
     // "Due by 7 PM", "Due tonight", "Due Nov 12, 7 PM"
@@ -3104,16 +3131,17 @@
       const task = allTasks.find(t => t.id === taskId);
       if (!task) return;
 
-      // 1. Approve the chore
-      await db.from('tasks').update({
+      // 1. Approve the chore (only once, even if tapped twice or on two phones)
+      const { data: approved } = await db.from('tasks').update({
         approved_by: session.id,
         approved_at: new Date().toISOString()
-      }).eq('id', taskId);
+      }).eq('id', taskId).is('approved_at', null).select('id');
+      if (!approved || approved.length === 0) { showToast('Already approved ✓'); await refreshTasks(); return; }
 
-      // 2. Add bank deposit if amount > 0
+      // 2. Add bank deposit — the early bonus if it was done in time
       const payoutTo = task.completed_by || task.assigned_to;
-      if (task.chore_amount > 0 && payoutTo) {
-        const amount = parseFloat(task.chore_amount);
+      const amount = earnedAmount(task);
+      if (amount > 0 && payoutTo) {
 
         // Upsert bank balance
         const { data: bal } = await db.from('bank_balances')
@@ -3152,18 +3180,30 @@
     function openRejectSheet(taskId) {
       const task = allTasks.find(t => t.id === taskId);
       if (!task) return;
-      const who = memberName(task.completed_by || task.assigned_to);
+      const claimer = task.completed_by || task.assigned_to;
+      const who = memberName(claimer);
       const late = task.due_at && new Date(task.due_at) <= new Date();
+      const isGrab = task.slot === 'grab' || (task.open_to_kids && !task.assigned_to);
+      const noteField = `
+        <div class="sheet-field">
+          <label class="sheet-label">Note to ${escHtml(who)} <span style="opacity:0.45">(optional)</span></label>
+          <input type="text" class="sheet-input" id="reject-note" maxlength="120" placeholder="e.g. still clothes on the floor">
+        </div>`;
+      const otherKids = familyMembers.filter(m => m.role === 'kid' && m.id !== claimer);
+      const grabChoices = isGrab ? `
+        <div class="sheet-label" style="margin:4px 0 8px">Someone else did it</div>
+        <div class="pill-row" style="margin-bottom:14px">
+          ${otherKids.map(k => `<div class="sel-pill" onclick="creditOtherKid('${task.id}','${k.id}')">${k.emoji} ${escHtml(k.name)} did it</div>`).join('')}
+        </div>
+        <button class="sheet-save-btn" style="margin-bottom:10px;background:transparent;border:1px solid var(--border);color:var(--text)" onclick="reopenChore('${task.id}')">🏆 Reopen for anyone</button>` : '';
       document.getElementById('sheet-body').innerHTML = `
         <div class="sheet-title">Send back "${escHtml(task.title)}"?</div>
-        <div class="sheet-toggle-sub" style="margin:-6px 0 16px">${late
-          ? `The deadline has passed, so this will count as missed for ${escHtml(who)}.`
-          : `${escHtml(who)} can redo it before the deadline.`}</div>
-        <div class="sheet-field">
-          <label class="sheet-label">Note <span style="opacity:0.45">(optional)</span></label>
-          <input type="text" class="sheet-input" id="reject-note" maxlength="120" placeholder="e.g. still clothes on the floor">
-        </div>
-        <button class="sheet-save-btn" onclick="rejectChore('${task.id}')">↩︎ Send back</button>`;
+        <div class="sheet-toggle-sub" style="margin:-6px 0 16px">${escHtml(who)} checked this off.${late
+          ? ' The deadline has passed, so sending it back counts as missed.'
+          : ''}</div>
+        ${noteField}
+        ${grabChoices}
+        <button class="sheet-save-btn" onclick="rejectChore('${task.id}')">↩︎ Back to ${escHtml(who)} to ${late ? 'miss' : 'redo'}</button>`;
       document.getElementById('sheet-overlay').classList.add('open');
       document.getElementById('add-sheet').classList.add('open');
     }
@@ -3188,6 +3228,49 @@
       showToast(late ? 'Sent back — counted as missed.' : `Sent back to ${memberName(kidId)}.`);
       sendPush(kidId, late ? `"${task.title}" was missed` : `↩︎ Redo "${task.title}"`,
         note || (late ? 'It was sent back after the deadline.' : 'Take another pass before the deadline.'), 'reject-' + task.id);
+      await refreshTasks();
+    }
+
+    // First-to-grab mix-up: another kid actually did it. Their credit, same check-off time.
+    async function creditOtherKid(taskId, kidId) {
+      if (session.role !== 'parent') return;
+      const task = allTasks.find(t => t.id === taskId);
+      if (!task) return;
+      const note = (document.getElementById('reject-note')?.value || '').trim();
+      const claimer = task.completed_by || task.assigned_to;
+      await db.from('tasks').update({
+        assigned_to:  kidId,
+        completed_by: kidId,
+        open_to_kids: false,
+        reject_note:  null,
+      }).eq('id', taskId);
+      closeAddSheet();
+      showToast(`Moved to ${memberName(kidId)} — ready to approve.`);
+      if (claimer && claimer !== kidId) {
+        sendPush(claimer, `"${task.title}" went to ${memberName(kidId)}`, note || `${memberName(kidId)} did this one.`, 'reject-' + task.id);
+      }
+      await refreshTasks();
+    }
+
+    // First-to-grab: put it back up for grabs, as if nobody had claimed it.
+    async function reopenChore(taskId) {
+      if (session.role !== 'parent') return;
+      const task = allTasks.find(t => t.id === taskId);
+      if (!task) return;
+      const note = (document.getElementById('reject-note')?.value || '').trim();
+      const claimer = task.completed_by || task.assigned_to;
+      const late = task.due_at && new Date(task.due_at) <= new Date();
+      await db.from('tasks').update({
+        completed_at: null,
+        completed_by: null,
+        assigned_to:  null,
+        open_to_kids: true,
+        reject_note:  null,
+        missed_at:    late ? new Date().toISOString() : null,
+      }).eq('id', taskId);
+      closeAddSheet();
+      showToast(late ? 'Reopened — but the deadline has passed, so it counts as missed.' : 'Reopened for anyone 🏆');
+      if (claimer) sendPush(claimer, `"${task.title}" was reopened`, note || 'It\'s back up for grabs.', 'reject-' + task.id);
       await refreshTasks();
     }
 
@@ -3432,6 +3515,17 @@
               <input type="number" class="sheet-input" id="sheet-amount" placeholder="0.00" min="0" step="0.25" value="${s ? Number(s.amount || 0) : ''}">
             </div>
           </div>
+          <div class="sheet-field">
+            <label class="sheet-label">Early bonus <span style="opacity:0.45">(optional)</span></label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <div class="amount-input-wrap" style="flex:1">
+                <span class="amount-prefix">$</span>
+                <input type="number" class="sheet-input" id="sheet-bonus-amount" placeholder="2.00" min="0" step="0.25" value="${s && s.bonus_amount ? Number(s.bonus_amount) : ''}">
+              </div>
+              <span style="opacity:0.5">if done by</span>
+              <input type="time" class="sheet-input" id="sheet-bonus-time" value="${s?.bonus_time || ''}" style="flex:1">
+            </div>
+          </div>
           ${s ? '' : `
           <div class="sheet-field">
             <div class="sheet-toggle-row">
@@ -3493,7 +3587,7 @@
     // Re-render the sheet but keep what's been typed so far.
     function rerenderSheet() {
       const keep = {};
-      for (const id of ['sheet-title-input', 'sheet-amount', 'sheet-desc', 'sheet-due', 'sheet-due-time', 'sheet-start', 'sheet-end']) {
+      for (const id of ['sheet-title-input', 'sheet-amount', 'sheet-bonus-amount', 'sheet-bonus-time', 'sheet-desc', 'sheet-due', 'sheet-due-time', 'sheet-start', 'sheet-end']) {
         const el = document.getElementById(id);
         if (el) keep[id] = el.value;
       }
@@ -3585,6 +3679,17 @@
           due_date: dueVal ? new Date(dueVal + 'T23:59:00').toISOString() : null }];
       } else {
         const chore = { ...base, due_at: dueIso(dueVal, timeVal), due_time: dueVal && timeVal ? timeVal : null };
+        const bonusAmt  = parseFloat(document.getElementById('sheet-bonus-amount')?.value || '0') || 0;
+        const bonusTime = document.getElementById('sheet-bonus-time')?.value;
+        if (bonusAmt > 0 && bonusTime) {
+          const day = dueVal || new Date().toLocaleDateString('en-CA');
+          chore.bonus_at = new Date(`${day}T${bonusTime}:00`).toISOString();
+          chore.bonus_amount = bonusAmt;
+        } else if (bonusAmt > 0 || bonusTime) {
+          showToast('For an early bonus, fill in both the amount and the time.');
+          btn.disabled = false; btn.textContent = 'Save';
+          return;
+        }
         if (sheetWho === 'each') {
           records = familyMembers.filter(m => m.role === 'kid').map(k => ({ ...chore, assigned_to: k.id }));
         } else if (sheetWho === 'grab') {
@@ -3640,6 +3745,7 @@
       choreSchedules = data || [];
       const rows = choreSchedules.map(s => {
         const bits = [scheduleWhoLabel(s), scheduleDaysLabel(s.days)];
+        if (s.bonus_time && s.bonus_amount) bits.push(`$${Number(s.bonus_amount).toFixed(2)} by ${timeLabel(s.bonus_time)}`);
         if (s.due_time) bits.push('due by ' + timeLabel(s.due_time));
         if (s.start_date || s.end_date) bits.push(`${s.start_date || '…'} → ${s.end_date || '…'}`);
         return `
@@ -3703,7 +3809,13 @@
         end_date:    end,
         priority:    sheetPriority,
         updated_at:  new Date().toISOString(),
+        bonus_amount: parseFloat(document.getElementById('sheet-bonus-amount')?.value || '0') || null,
+        bonus_time:  document.getElementById('sheet-bonus-time')?.value || null,
       };
+      if ((record.bonus_amount && !record.bonus_time) || (!record.bonus_amount && record.bonus_time)) {
+        showToast('For an early bonus, fill in both the amount and the time.');
+        return;
+      }
       const btn = document.querySelector('.sheet-save-btn');
       btn.disabled = true; btn.textContent = 'Saving…';
 

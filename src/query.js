@@ -143,8 +143,10 @@ async function authorize(env, me, q, rows) {
       for (const k of Object.keys(rows[0])) if (!allowed.has(k)) throw new QueryError('Not allowed', 403);
       if (rows[0].completed_by != null && rows[0].completed_by !== me.id) throw new QueryError('Not allowed', 403);
       extra.push(mine);
-      // Checking off only counts before the deadline.
+      // Checking off only counts before the deadline, and the server sets the time
+      // (it decides early bonuses, so a phone's clock can't).
       if (rows[0].completed_at != null) {
+        rows[0].completed_at = new Date().toISOString();
         extra.push({ sql: 'due_at IS NULL OR due_at > ?', args: [new Date().toISOString()] });
       }
     } else if (q.op === 'delete') {
@@ -154,7 +156,7 @@ async function authorize(env, me, q, rows) {
         if (r.is_chore === true || r.open_to_kids === true) throw new QueryError('Only a parent can create chores.', 403);
         r.assigned_to = me.id;
         r.created_by = me.id;
-        for (const k of ['schedule_id', 'for_date', 'slot', 'due_at', 'missed_at', 'reject_note', 'reminded_at']) delete r[k];
+        for (const k of ['schedule_id', 'for_date', 'slot', 'due_at', 'missed_at', 'reject_note', 'reminded_at', 'bonus_at', 'bonus_amount']) delete r[k];
       }
     }
   }

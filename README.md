@@ -36,6 +36,10 @@ separate Workers; that setup is in `z_archive/` and git history.)
 - **Deadlines:** a chore not checked off by its due-by time (or midnight) is **missed** — no pay.
   Checked off in time = paid whenever a parent approves. **Send back** (↩︎) returns it to the kid
   with an optional note; after the deadline it counts as missed.
+- **Early bonus** (optional): e.g. $2 if checked off by 10 AM, the regular amount after. The
+  server stamps the check-off time, so a phone's clock can't fake it. No bonus reminder.
+- **Send back a first-to-grab chore:** "*Kid* did it" (credit goes to the kid who really did it,
+  ready to approve), "Reopen for anyone", or back to the kid who claimed it to redo.
 - **Reminders:** push 1 hour before a due-by time, or 7 PM for chores due at midnight.
 - Parents see "chores missed this week" per kid on the Bank tab.
 
